@@ -45,6 +45,7 @@ local tostring, unpack = tostring, unpack
 
 function vm.run(chunk, args, upvals, globals, hook)
 	local R = {}
+	local top = 0
 	local pc = 0
 	local code = chunk.instructions
 	local constants = chunk.constants
@@ -208,7 +209,7 @@ function vm.run(chunk, args, upvals, globals, hook)
 				--local cargs = {}
 				local s,e
 				if b == 0 then
-					s,e=a+2,math.min(#R,chunk.maxStack-2)
+					s,e=a+2,top
 					--for i=a+2, chunk.maxStack-2 do cargs[#cargs+1] = R[i] end
 				else
 					s,e=a+1,a+b-1
@@ -222,7 +223,7 @@ function vm.run(chunk, args, upvals, globals, hook)
 					ret = {R[a](unpack(R,s,e))}
 				
 					if c == 0 then
-						for i=a, a+#ret do R[i] = ret[i-a] end
+						for i=a, a+#ret do R[i] = ret[i-a] top = i end
 					else
 						local g = 1
 						for i=a, a+c-2 do R[i] = ret[g] g=g+1 end
@@ -235,7 +236,11 @@ function vm.run(chunk, args, upvals, globals, hook)
 			return unpack(ret)
 		elseif o == TAILCALL then
 			local cargs = {}
-			for i=a+1, a+b-1 do cargs[#cargs+1] = R[i] end
+			if b == 0 then
+				for i=a+2, top do cargs[#cargs+1] = R[i] end
+			else
+				for i=a+1, a+b-1 do cargs[#cargs+1] = R[i] end
+			end
 			return R[a](unpack(cargs))
 		elseif o == VARARG then
 			if b > 0 then
@@ -247,11 +252,12 @@ function vm.run(chunk, args, upvals, globals, hook)
 			else
 				for i, v in pairs(args) do
 					R[a+i] = v
+					top = a+i
 				end
 			end
 		elseif o == SELF then
-			R[a+1] = R[c]
-			R[a] = R[b][RK(b)]
+			R[a+1] = R[b]
+			R[a] = R[b][RK(c)]
 		elseif o == EQ then
 			if (RK(b) == RK(c)) == (a ~= 0) then
 				pc = pc+getsBx(code[pc])+1
