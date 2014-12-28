@@ -16,6 +16,46 @@ local function debug(...)
 	end
 end
 
+local instructionNames = {
+	[0]="MOVE","LOADK","LOADBOOL","LOADNIL",
+	"GETUPVAL","GETGLOBAL","GETTABLE",
+	"SETGLOBAL","SETUPVAL","SETTABLE","NEWTABLE",
+	"SELF","ADD","SUB","MUL","DIV","MOD","POW","UNM","NOT","LEN","CONCAT",
+	"JMP","EQ","LT","LE","TEST","TESTSET","CALL","TAILCALL","RETURN",
+	"FORLOOP","FORPREP","TFORLOOP","SETLIST","CLOSE","CLOSURE","VARARG"
+}
+
+local ins = {}
+for i, v in pairs(instructionNames) do ins[v] = i end
+
+local iABC = 0
+local iABx = 1
+local iAsBx = 2
+
+local instructionFormats = {
+	[0]=iABC,iABx,iABC,iABC,
+	iABC,iABx,iABC,
+	iABx,iABC,iABC,iABC,
+	iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,
+	iAsBx,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,
+	iAsBx,iAsBx,iABC,iABC,iABC,iABx,iABC
+}
+
+function bytecode.decode(inst)
+	local opcode = bit.band(inst,0x3F)
+	local format = instructionFormats[opcode]
+	if format == iABC then
+		return opcode, bit.band(bit.brshift(inst,6),0xFF), bit.band(bit.brshift(inst,23),0x1FF), bit.band(bit.brshift(inst,14),0x1FF)
+	elseif format == iABx then
+		return opcode, bit.band(bit.brshift(inst,6),0xFF), bit.band(bit.brshift(inst,14),0x3FFFF)
+	elseif format == iAsBx then
+		local sBx = bit.band(bit.brshift(inst,14),0x3FFFF)-131071
+		return opcode, bit.band(bit.brshift(inst,6),0xFF), sBx
+	else
+		error(opcode.." "..format)
+	end
+end
+
 function bytecode.load(bc)
 	debug("Loading binary chunk with size "..#bc.."b")
 	local idx = 1
@@ -105,7 +145,7 @@ function bytecode.load(bc)
 				else
 					error("Type: "..type)
 				end
-				debug("Constant "..(i-1)..": "..constants[i-1])
+				debug("Constant "..(i-1)..": "..tostring(constants[i-1]))
 			end
 			return constants
 		end
@@ -285,4 +325,22 @@ function bytecode.save(chunk)
 	
 	writeChunk(chunk)
 	return table.concat(bc)
+end
+
+function bytecode.new()
+	return {
+		lineDefined = 0,
+		isvararg = 2,
+		sourceLines = {[0]=1},
+		nparam = 0,
+		lastLineDefined = 0,
+		maxStack = 2,
+		upvalues = {},
+		instructions = {[0]=8388638},
+		locals = {},
+		functionPrototypes = {},
+		nupval = 0,
+		name = "",
+		constants = {}
+	}
 end

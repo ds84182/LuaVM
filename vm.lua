@@ -53,7 +53,7 @@ function vm.run(chunk, args, upvals, globals, hook)
 	upvals = upvals or {}
 	globals = globals or _G
 	local openUpvalues = {}
-	for i, v in pairs(args) do R[i-1] = v end
+	for i=1,chunk.nparam do R[i-1] = args[i] top = i-1 end
 	
 	local function decodeInstruction(inst)
 		local opcode = band(inst,0x3F)
@@ -76,7 +76,7 @@ function vm.run(chunk, args, upvals, globals, hook)
 	end
 	
 	local function RK(n)
-		return n > 256 and constants[n-256] or R[n]
+		return n >= 256 and constants[n-256] or R[n]
 	end
 	
 	local typecheck
@@ -86,7 +86,7 @@ function vm.run(chunk, args, upvals, globals, hook)
 			for i=1, select("#",...) do
 				if t == select(i,...) then return end
 			end
-			error((...).." expected, got "..v)
+			error((...).." expected, got "..t)
 		end
 	else
 		function typecheck() end
@@ -132,242 +132,249 @@ function vm.run(chunk, args, upvals, globals, hook)
 	local CLOSURE = 36
 	local VARARG = 37
 	
-	while true do
-		local o,a,b,c = decodeInstruction(code[pc])
-		if vm.debug then debug(pc,instructionNames[o],a,b,c) end
-		pc = pc+1
-		if hook then hook() end
+	--local ret = {pcall(function()
+		while true do
+			local o,a,b,c = decodeInstruction(code[pc])
+			if vm.debug then debug(pc,instructionNames[o],a,b,c) end
+			pc = pc+1
+			if hook then hook() end
 		
-		if o == MOVE then
-			R[a] = R[b]
-		elseif o == LOADNIL then
-			for i=a, c do
-				R[i] = nil
-			end
-		elseif o == LOADK then
-			R[a] = constants[b]
-		elseif o == ins.LOADBOOL then
-			R[a] = b ~= 0
-			if c ~= 0 then
-				pc = pc+1
-			end
-		elseif o == GETGLOBAL then
-			R[a] = globals[constants[b]]
-		elseif o == SETGLOBAL then
-			globals[constants[b]] = R[a]
-		elseif o == GETUPVAL then
-			R[a] = upvals[b]
-		elseif o == SETUPVAL then
-			upvals[b] = R[a]
-		elseif o == GETTABLE then
-			R[a] = R[b][RK(c)]
-		elseif o == SETTABLE then
-			R[a][RK(c)] = RK(b)
-		elseif o == ADD then
-			R[a] = RK(b)+RK(c)
-		elseif o == SUB then
-			R[a] = RK(b)-RK(c)
-		elseif o == MUL then
-			R[a] = RK(b)*RK(c)
-		elseif o == DIV then
-			R[a] = RK(b)/RK(c)
-		elseif o == MOD then
-			R[a] = RK(b)%RK(c)
-		elseif o == POW then
-			R[a] = RK(b)^RK(c)
-		elseif o == UNM then
-			R[a] = -RK(c)
-		elseif o == NOT then
-			R[a] = not RK(c)
-		elseif o == LEN then
-			R[a] = #RK(c)
-		elseif o == CONCAT then
-			local sct = {}
-			for i=b, c do sct[#sct+1] = tostring(R[i]) end
-			R[a] = table.concat(sct)
-		elseif o == JMP then
-			pc = (pc+b)
-		elseif o == CALL then
-			typecheck(R[a],"function")
-			local ret
-			if b == 1 then
-				if c == 1 then
-					R[a]()
-				elseif c == 2 then
-					R[a] = R[a]()
-				else
-					ret = {R[a]()}
-					
-					if c == 0 then
-						for i=a, a+#ret do R[i] = ret[i-a] end
-					else
-						local g = 1
-						for i=a, a+c-2 do R[i] = ret[g] g=g+1 end
-					end
-				end
-			else
-				--local cargs = {}
-				local s,e
-				if b == 0 then
-					s,e=a+2,top
-					--for i=a+2, chunk.maxStack-2 do cargs[#cargs+1] = R[i] end
-				else
-					s,e=a+1,a+b-1
-					--for i=a+1, a+b-1 do cargs[#cargs+1] = R[i] end
-				end
-				if c == 1 then
-					R[a](unpack(R,s,e))
-				elseif c == 2 then
-					R[a] = R[a](unpack(R,s,e))
-				else
-					ret = {R[a](unpack(R,s,e))}
-				
-					if c == 0 then
-						for i=a, a+#ret do R[i] = ret[i-a] top = i end
-					else
-						local g = 1
-						for i=a, a+c-2 do R[i] = ret[g] g=g+1 end
-					end
-				end
-			end
-		elseif o == RETURN then
-			local ret = {}
-			for i=a, a+b-2 do ret[#ret+1] = R[i] end
-			return unpack(ret)
-		elseif o == TAILCALL then
-			local cargs = {}
-			if b == 0 then
-				for i=a+2, top do cargs[#cargs+1] = R[i] end
-			else
-				for i=a+1, a+b-1 do cargs[#cargs+1] = R[i] end
-			end
-			return R[a](unpack(cargs))
-		elseif o == VARARG then
-			if b > 0 then
-				local i = 1
-				for n=a, a+b-1 do
-					R[n] = args[i]
-					i = i+1
-				end
-			else
-				for i, v in pairs(args) do
-					R[a+i] = v
-					top = a+i
-				end
-			end
-		elseif o == SELF then
-			R[a+1] = R[b]
-			R[a] = R[b][RK(c)]
-		elseif o == EQ then
-			if (RK(b) == RK(c)) == (a ~= 0) then
-				pc = pc+getsBx(code[pc])+1
-			else
-				pc = pc+1
-			end
-		elseif o == LT then
-			if (RK(b) < RK(c)) == (a ~= 0) then
-				pc = pc+getsBx(code[pc])+1
-			else
-				pc = pc+1
-			end
-		elseif o == LE then
-			if (RK(b) <= RK(c)) == (a ~= 0) then
-				pc = pc+getsBx(code[pc])+1
-			else
-				pc = pc+1
-			end
-		elseif o == TEST then
-			if (not R[a]) ~= (c ~= 0) then
-				pc = pc+getsBx(code[pc])+1
-			else
-				pc = pc+1
-			end
-		elseif o == TESTSET then
-			if (not R[b]) ~= (c ~= 0) then
+			if o == MOVE then
 				R[a] = R[b]
-				pc = pc+1
-			else
-				pc = pc+getsBx(code[pc])+1
-			end
-		elseif o == FORPREP then
-			R[a] = R[a]-R[a+2]
-			pc = pc+b
-		elseif o == FORLOOP then
-			local step = R[a+2]
-			R[a] = R[a]+step
-			local idx = R[a]
-			local limit = R[a+1]
-			
-			if (step < 0 and limit < idx or idx < limit) then
+			elseif o == LOADNIL then
+				for i=a, c do
+					R[i] = nil
+				end
+			elseif o == LOADK then
+				R[a] = constants[b]
+			elseif o == ins.LOADBOOL then
+				R[a] = b ~= 0
+				if c ~= 0 then
+					pc = pc+1
+				end
+			elseif o == GETGLOBAL then
+				R[a] = globals[constants[b]]
+			elseif o == SETGLOBAL then
+				globals[constants[b]] = R[a]
+			elseif o == GETUPVAL then
+				R[a] = upvals[b]
+			elseif o == SETUPVAL then
+				upvals[b] = R[a]
+			elseif o == GETTABLE then
+				R[a] = R[b][RK(c)]
+			elseif o == SETTABLE then
+				R[a][RK(b)] = RK(c)
+			elseif o == ADD then
+				R[a] = RK(b)+RK(c)
+			elseif o == SUB then
+				R[a] = RK(b)-RK(c)
+			elseif o == MUL then
+				R[a] = RK(b)*RK(c)
+			elseif o == DIV then
+				R[a] = RK(b)/RK(c)
+			elseif o == MOD then
+				R[a] = RK(b)%RK(c)
+			elseif o == POW then
+				R[a] = RK(b)^RK(c)
+			elseif o == UNM then
+				R[a] = -RK(c)
+			elseif o == NOT then
+				R[a] = not RK(c)
+			elseif o == LEN then
+				R[a] = #RK(c)
+			elseif o == CONCAT then
+				local sct = {}
+				for i=b, c do sct[#sct+1] = tostring(R[i]) end
+				R[a] = table.concat(sct)
+			elseif o == JMP then
+				pc = (pc+b)
+			elseif o == CALL then
+				typecheck(R[a],"function")
+				local ret
+				if b == 1 then
+					if c == 1 then
+						R[a]()
+					elseif c == 2 then
+						R[a] = R[a]()
+					else
+						ret = {R[a]()}
+					
+						if c == 0 then
+							for i=a, a+#ret-1 do R[i] = ret[i-a+1] top = i end
+						else
+							local g = 1
+							for i=a, a+c-2 do R[i] = ret[g] g=g+1 end
+						end
+					end
+				else
+					--local cargs = {}
+					local s,e
+					if b == 0 then
+						s,e=a+1,top
+						--for i=a+2, chunk.maxStack-2 do cargs[#cargs+1] = R[i] end
+					else
+						s,e=a+1,a+b-1
+						--for i=a+1, a+b-1 do cargs[#cargs+1] = R[i] end
+					end
+					if c == 1 then
+						R[a](unpack(R,s,e))
+					elseif c == 2 then
+						R[a] = R[a](unpack(R,s,e))
+					else
+						ret = {R[a](unpack(R,s,e))}
+				
+						if c == 0 then
+							for i=a, a+#ret-1 do R[i] = ret[i-a+1] top = i end
+						else
+							local g = 1
+							for i=a, a+c-2 do R[i] = ret[g] g=g+1 end
+						end
+					end
+				end
+			elseif o == RETURN then
+				local ret = {}
+				for i=a, a+b-2 do ret[#ret+1] = R[i] end
+				return unpack(ret)
+			elseif o == TAILCALL then
+				local cargs = {}
+				if b == 0 then
+					for i=a+2, top do cargs[#cargs+1] = R[i] end
+				else
+					for i=a+1, a+b-1 do cargs[#cargs+1] = R[i] end
+				end
+				return R[a](unpack(cargs))
+			elseif o == VARARG then
+				if b > 0 then
+					local i = 1
+					for n=a, a+b-1 do
+						R[n] = args[i]
+						i = i+1
+					end
+				else
+					for i=chunk.nparam+1, #args do
+						R[a+i-1] = args[i]
+						top = a+i-1
+					end
+				end
+			elseif o == SELF then
+				R[a+1] = R[b]
+				R[a] = R[b][RK(c)]
+			elseif o == EQ then
+				if (RK(b) == RK(c)) == (a ~= 0) then
+					pc = pc+getsBx(code[pc])+1
+				else
+					pc = pc+1
+				end
+			elseif o == LT then
+				if (RK(b) < RK(c)) == (a ~= 0) then
+					pc = pc+getsBx(code[pc])+1
+				else
+					pc = pc+1
+				end
+			elseif o == LE then
+				if (RK(b) <= RK(c)) == (a ~= 0) then
+					pc = pc+getsBx(code[pc])+1
+				else
+					pc = pc+1
+				end
+			elseif o == TEST then
+				if (not R[a]) ~= (c ~= 0) then
+					pc = pc+getsBx(code[pc])+1
+				else
+					pc = pc+1
+				end
+			elseif o == TESTSET then
+				if (not R[b]) ~= (c ~= 0) then
+					R[a] = R[b]
+					pc = pc+1
+				else
+					pc = pc+getsBx(code[pc])+1
+				end
+			elseif o == FORPREP then
+				R[a] = R[a]-R[a+2]
 				pc = pc+b
-				R[a+3] = R[a]
-			end
-		elseif o == TFORLOOP then
-			local ret = {R[a](R[a+1],R[a+2])}
-			local i = 1
-			for n=a+3, a+3+b do R[n] = ret[i] i=i+1 end
-			if R[a+3] ~= nil then
-				R[a+2] = R[a+3]
+			elseif o == FORLOOP then
+				local step = R[a+2]
+				R[a] = R[a]+step
+				local idx = R[a]
+				local limit = R[a+1]
+			
+				if (step < 0 and limit <= idx or idx <= limit) then
+					pc = pc+b
+					R[a+3] = R[a]
+				end
+			elseif o == TFORLOOP then
+				local ret = {R[a](R[a+1],R[a+2])}
+				local i = 1
+				for n=a+3, a+3+b do R[n] = ret[i] i=i+1 end
+				if R[a+3] ~= nil then
+					R[a+2] = R[a+3]
+				else
+					pc = pc+1
+				end
+			elseif o == NEWTABLE then
+				R[a] = {}
+			elseif o == SETLIST then
+				for i=1, b do
+					R[a][((c-1)*50)+i] = R[a+i]
+				end
+			elseif o == CLOSURE then
+				local proto = chunk.functionPrototypes[b]
+				local upvaldef = {}
+				local upvalues = setmetatable({},{__index=function(_,i)
+					if not upvaldef[i] then error("unknown upvalue") end
+					local uvd = upvaldef[i]
+					if uvd.type == 0 then --local upvalue
+						return R[uvd.reg]
+					elseif uvd.type == 1 then
+						return upvals[uvd.reg]
+					else
+						return uvd.storage
+					end
+				end,__newindex=function(_,i,v)
+					if not upvaldef[i] then error("unknown upvalue") end
+					local uvd = upvaldef[i]
+					if uvd.type == 0 then --local upvalue
+						R[uvd.reg] = v
+					elseif uvd.type == 1 then
+						upvals[uvd.reg] = v
+					else
+						uvd.storage = v
+					end
+				end})
+				R[a] = function(...)
+					return vm.run(proto, {...}, upvalues, globals, hook)
+				end
+				for i=1, proto.nupval do
+					local o,a,b,c = decodeInstruction(code[pc+i-1])
+					debug(pc+i,"PSD",instructionNames[o],a,b,c)
+					if o == MOVE then
+						upvaldef[i-1] = openUpvalues[b] or {type=0,reg=b}
+						openUpvalues[b] = upvaldef[i-1]
+					elseif o == GETUPVAL then
+						upvaldef[i-1] = {type=1,reg=b}
+					else
+						error("unknown upvalue psuedop")
+					end
+				end
+				pc = pc+proto.nupval
+			elseif o == CLOSE then
+				for i=a, chunk.maxStack do
+					if openUpvalues[i] then
+						local ouv = openUpvalues[i]
+						ouv.type = 2 --closed
+						ouv.storage = R[ouv.reg]
+						openUpvalues[i] = nil
+					end
+				end
 			else
-				pc = pc+1
+				error("Unknown opcode!")
 			end
-		elseif o == NEWTABLE then
-			R[a] = {}
-		elseif o == SETLIST then
-			for i=1, b do
-				R[a][((c-1)*50)+i] = R[a+i]
-			end
-		elseif o == CLOSURE then
-			local proto = chunk.functionPrototypes[b]
-			local upvaldef = {}
-			local upvalues = setmetatable({},{__index=function(_,i)
-				if not upvaldef[i] then error("unknown upvalue") end
-				local uvd = upvaldef[i]
-				if uvd.type == 0 then --local upvalue
-					return R[uvd.reg]
-				elseif uvd.type == 1 then
-					return upvals[uvd.reg]
-				else
-					return uvd.storage
-				end
-			end,__newindex=function(_,i,v)
-				if not upvaldef[i] then error("unknown upvalue") end
-				local uvd = upvaldef[i]
-				if uvd.type == 0 then --local upvalue
-					R[uvd.reg] = v
-				elseif uvd.type == 1 then
-					upvals[uvd.reg] = v
-				else
-					uvd.storage = v
-				end
-			end})
-			R[a] = function(...)
-				return vm.run(proto, {...}, upvalues, globals, hook)
-			end
-			for i=1, proto.nupval do
-				local o,a,b,c = decodeInstruction(code[pc+i-1])
-				debug(pc+i,"PSD",instructionNames[o],a,b,c)
-				if o == MOVE then
-					upvaldef[i-1] = openUpvalues[b] or {type=0,reg=b}
-					openUpvalues[b] = upvaldef[i-1]
-				elseif o == GETUPVAL then
-					upvaldef[i-1] = {type=1,reg=b}
-				else
-					error("unknown upvalue psuedop")
-				end
-			end
-			pc = pc+proto.nupval
-		elseif o == CLOSE then
-			for i=a, chunk.maxStack do
-				if openUpvalues[i] then
-					local ouv = openUpvalues[i]
-					ouv.type = 2 --closed
-					ouv.storage = R[ouv.reg]
-					openUpvalues[i] = nil
-				end
-			end
-		else
-			error("Unknown opcode!")
 		end
-	end
+	--[[end)}
+	if not ret[1] then
+		error(ret[2].." at pc "..(pc-1).." line "..chunk.sourceLines[pc-1])
+	else
+		return unpack(ret,2)
+	end]]
 end
