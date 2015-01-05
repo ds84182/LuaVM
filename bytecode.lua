@@ -41,6 +41,19 @@ local instructionFormats = {
 	iAsBx,iAsBx,iABC,iABC,iABC,iABx,iABC
 }
 
+bytecode.defaultReturn = 8388638
+
+function bytecode.encode(inst,a,b,c)
+	inst = type(inst) == "string" and ins[inst] or inst
+	local format = instructionFormats[inst]
+	return
+		format == iABC and
+		bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b,0x1FF),23), bit.blshift(bit.band(c,0x1FF),14)) or
+		format == iABx and
+		bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b,0x3FFFF),14)) or
+		bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b+131071,0x3FFFF),14))
+end
+
 function bytecode.decode(inst)
 	local opcode = bit.band(inst,0x3F)
 	local format = instructionFormats[opcode]
@@ -331,7 +344,7 @@ function bytecode.new()
 	return {
 		lineDefined = 0,
 		isvararg = 2,
-		sourceLines = {[0]=1},
+		sourceLines = {},
 		nparam = 0,
 		lastLineDefined = 0,
 		maxStack = 2,

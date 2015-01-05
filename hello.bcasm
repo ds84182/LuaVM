@@ -1,4 +1,4 @@
 --lua asm example: return "hello"
 .const hello "hello"
 loadk hello, 0
-return 0
+return 0, 2, 0 --returns the loaded constant

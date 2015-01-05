@@ -7,7 +7,7 @@ if not bit.blshift then
 end
 
 compiler = {}
-compiler.debug = true
+compiler.debug = false
 
 function debug(...)
 	if compiler.debug then
@@ -40,6 +40,7 @@ local instructionFormats = {
 	iAsBx,iAsBx,iABC,iABC,iABC,iABx,iABC
 }
 
+--faster version of bytecode.encode, does not convert and do and checks
 local function encode(ins,a,b,c)
 	local fmt = instructionFormats[ins]
 	if fmt == iABC then
@@ -57,14 +58,22 @@ function compiler.compile(bcasm)
 	
 	local nconst = 0
 	local constants = {}
+	local ninstr = 0
+	local instructions = {}
 	
 	local function matchSpace()
 		local s, e = bcasm:find("^[ \n\t]*",idx)
 		idx = e and e+1 or idx
+		return not not e
+	end
+	
+	local function matchComment()
+		local s, e = bcasm:find("^%-%-(.-)\n",idx)
+		idx = e and e+1 or idx
 	end
 	
 	local function matchIdentifier()
-		local s, e = bcasm:find("^[a-zA-Z_][a-zA-Z0-9_]")
+		local s, e = bcasm:find("^([a-zA-Z_][a-zA-Z0-9_]*)",idx)
 		idx = e and e+1 or idx
 		return s and bcasm:sub(s,e) or nil
 	end
@@ -96,12 +105,13 @@ function compiler.compile(bcasm)
 				end
 				c = bcasm:sub(idx,idx)
 			end
+			idx = idx+1
 			return table.concat(str)
 		end
 	end
 	
 	local function matchNumber()
-		local s, e = bcasm:find("^\d+",idx)
+		local s, e = bcasm:find("^%d+",idx)
 		idx = e and e+1 or idx
 		return s and tonumber(bcasm:sub(s,e)) or nil
 	end
@@ -120,25 +130,60 @@ function compiler.compile(bcasm)
 			matchSpace()
 			local val = matchValue()
 			if not val then error("Failed to identify constant at "..sidx) end
-			constants[nconst] = {name=id, value=val}
+			constants[nconst] = {name=id, value=val, idx=nconst}
+			constants[id] = constants[nconst]
 			nconst = nconst+1
 		end
 	end
 	
 	local function matchInstruction()
-		for i=0, #instructionNames do
-			local n = instructionNames[i]
-			if bcasm:sub(idx, idx+#n-1):upper() == n then
-				local fmt = instructionFormats[i]
-				local max = fmt == iABC and 3 or 2
-				
+		local s,e = bcasm:find("^([^ \n\t]+)",idx)
+		if not s then return end
+		local iname = bcasm:sub(s,e):upper()
+		local i = ins[iname]
+		if not i then error("Invalid instruction name \""..iname.."\" at "..idx) end
+		idx = e+1
+		debug("Found instruction "..iname)
+		local fmt = instructionFormats[i]
+		local args = {}
+		while #args < 2 or bcasm:sub(idx,idx) == "," do
+			matchSpace()
+			if bcasm:sub(idx,idx) == "," then idx = idx+1 matchSpace() end
+			local id = matchIdentifier()
+			if id then
+				args[#args+1] = constants[id].idx
+			else
+				local num = matchNumber()
+				if not num then
+					error("Failed to identify constant at "..idx)
+				end
+				args[#args+1] = num
 			end
 		end
+		
+		instructions[ninstr] = encode(i,args[1] or 0,args[2] or 0,args[3] or 0)
+		ninstr = ninstr+1
 	end
 	
+	local lastidx = idx
 	while idx < #bcasm do
+		matchSpace()
+		matchComment()
 		matchSpace()
 		matchConst()
 		matchInstruction()
+		if idx == lastidx then error("Failed to identify at "..idx) end
+		lastidx = idx
 	end
+	
+	local bc = bytecode.new()
+	for i=0, nconst-1 do
+		bc.constants[i] = constants[i].value
+	end
+	for i=0, ninstr-1 do
+		bc.instructions[i] = instructions[i]
+	end
+	bc.instructions[ninstr] = bytecode.defaultReturn
+	bc.maxStack = 127 --TODO: Max stack!
+	return bc
 end
