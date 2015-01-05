@@ -5,8 +5,6 @@ if not bit.blshift then
 	bit.brshift = bit.rshift
 end
 
-local unpack = unpack or table.unpack
-
 vm = {}
 vm.debug = false
 vm.typechecking = true
