@@ -116,10 +116,8 @@ function bytecode.load(bc)
 	
 	--verify header--
 	assert(ub(4) == "\27Lua", "invalid header signature")
-	do
-		local ver = u1()
-		assert(ver == 0x51, ("version not supported: Lua%X"):format(ver))
-	end
+	local version = u1()
+	assert(version == 0x51 or version == 0x52, ("version not supported: Lua%X"):format(version))
 	do
 		local fmtver = u1()
 		assert(fmtver == 0 or fmtver == 255, "unknown format version "..fmtver)
@@ -132,6 +130,9 @@ function bytecode.load(bc)
 	if integer == u8 then print("Caution: Because you are on a 128bit(!?) platform, LuaVM2 will chop off the upper 4 bytes from integer!") end
 	size_t = types:byte(3) == 8 and u8 or u4
 	--if size_t == u8 then print("Caution: Because you are on a 64bit platform, LuaVM2 will chop off the upper 4 bytes from size_t!") end
+	if version == 0x52 then
+		ub(6)
+	end
 	debug("header is legit")
 	
 	local function chunk()
@@ -200,20 +201,44 @@ function bytecode.load(bc)
 		end
 		
 		--extract an lua chunk into a table--
-		local c = {}
-		c.name = us()
-		c.lineDefined = integer()
-		c.lastLineDefined = integer()
-		c.nupval = u1()
-		c.nparam = u1()
-		c.isvararg = u1()
-		c.maxStack = u1()
-		c.instructions = instructionList()
-		c.constants = constantList()
-		c.functionPrototypes = functionPrototypeList()
-		c.sourceLines = sourceLineList()
-		c.locals = localList()
-		c.upvalues = upvalueList()
+		local c = {version = version}
+		if version == 0x51 then
+			c.name = us()
+			c.lineDefined = integer()
+			c.lastLineDefined = integer()
+			c.nupval = u1()
+			c.nparam = u1()
+			c.isvararg = u1()
+			c.maxStack = u1()
+			c.instructions = instructionList()
+			c.constants = constantList()
+			c.functionPrototypes = functionPrototypeList()
+			c.sourceLines = sourceLineList()
+			c.locals = localList()
+			c.upvalues = upvalueList()
+		else
+			local function upvalueList52()
+				local upvalues = {}
+				for i=1, integer() do
+					upvalues[i-1] = {instack=u1(),idx=u1()}
+					debug(("upvalue %d instack=%d idx=%d"):format(i-1,upvalues[i-1].instack,upvalues[i-1].idx))
+				end
+				return upvalues
+			end
+			c.lineDefined = integer()
+			c.lastLineDefined = integer()
+			c.nparam = u1()
+			c.isvararg = u1()
+			c.maxStack = u1()
+			c.instructions = instructionList()
+			c.constants = constantList()
+			c.functionPrototypes = functionPrototypeList()
+			c.upvalues52 = upvalueList52()
+			c.name = us()
+			c.sourceLines = sourceLineList()
+			c.locals = localList()
+			c.upvalues = upvalueList()
+		end
 		return c
 	end
 	return chunk()
@@ -221,6 +246,7 @@ end
 
 local header = "\27Lua"..string.char(0x51)..string.char(0)..supportedTypes
 function bytecode.save(chunk)
+	assert(chunk.version == 0x51, "Cannot save newer Lua versions! Sorry!")
 	local bc = {header}
 	
 	local function w1(b)
@@ -342,6 +368,7 @@ end
 
 function bytecode.new()
 	return {
+		version = 0x51,
 		lineDefined = 0,
 		isvararg = 2,
 		sourceLines = {},

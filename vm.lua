@@ -41,7 +41,7 @@ local instructionFormats = {
 }
 
 local band, brshift = bit.band, bit.brshift
-local tostring, unpack = tostring, unpack
+local tostring, unpack = tostring, unpack or table.unpack
 
 function vm.run(chunk, args, upvals, globals, hook)
 	local R = {}
@@ -50,10 +50,19 @@ function vm.run(chunk, args, upvals, globals, hook)
 	local code = chunk.instructions
 	local constants = chunk.constants
 	args = args or {}
-	upvals = upvals or {}
 	globals = globals or _G
+	upvals = upvals or {}
+	if upvals[0] == nil and chunk.version == 0x52 then
+		upvals[0] = globals
+	end
 	local openUpvalues = {}
 	for i=1,chunk.nparam do R[i-1] = args[i] top = i-1 end
+	if chunk.upvalues52 then
+		--Lua 5.2 can load upvalues into the register list before execution, pretty cool
+		for i, v in pairs(chunk.upvalues52) do
+			R[v.instack] = upvals[v.idx]
+		end
+	end
 	
 	local function decodeInstruction(inst)
 		local opcode = band(inst,0x3F)
