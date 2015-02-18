@@ -1,0 +1,4 @@
+--lua asm example: globals with spaces()
+.const gws "globals with spaces"
+getglobal 0, gws
+call 0, 1, 1

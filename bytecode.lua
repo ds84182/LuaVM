@@ -384,3 +384,10 @@ function bytecode.new()
 		constants = {}
 	}
 end
+
+function bytecode.dump(bc)
+	for i=0, #bc.instructions do
+		local o,a,b,c = bytecode.decode(bc.instructions[i])
+		print(i, instructionNames[o], a, b, c)
+	end
+end
