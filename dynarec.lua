@@ -294,23 +294,26 @@ function dynarec.compile(chunk, hookemit)
 		[CALL] = function(o,a,b,c)
 			--dynamically generate an exp def--
 			local expdef = {}
-			expdef[#expdef+1] = "|R"..a.."|("
-			if c == 1 then
-				if b > 1 then
-					for i=a+1, a+b-1 do
-						expdef[#expdef+1] = "|R"..i.."|"
-						if i ~= a+b-1 then
-							expdef[#expdef+1] = ","
-						end
+			expdef[#expdef+1] = "|RF"..a.."|("
+			local ret
+			if c == 2 then
+				ret = a
+			elseif c ~= 1 then
+				error("I DON'T HAVE MULTI RETURN SHIT YET")
+			end
+			
+			if b >= 1 then
+				for i=a+1, a+b-1 do
+					expdef[#expdef+1] = "|R"..i.."|"
+					if i ~= a+b-1 then
+						expdef[#expdef+1] = ","
 					end
-				else
-					error("VARARG FUNCTION?!")
 				end
 			else
-				error("I DON'T HAVE RETURN SHIT YET")
+				error("VARARG FUNCTION?!")
 			end
 			expdef[#expdef+1] = ")"
-			return table.concat(expdef),nil
+			return table.concat(expdef),ret
 		end
 	}
 	
@@ -365,15 +368,11 @@ function dynarec.compile(chunk, hookemit)
 		end
 		local function getFirstUseBefore(r,pc)
 			local lastpc = -1
-			for i, v in pairs(usedAt[r]) do print("UA",r,i) end
-			for i, v in pairs(setAt[r]) do print("SA",r,i) end
 			for i, v in pairs(setAt[r]) do
 				if i < pc then
 					if not usedAt[r][i] then
 						lastpc = i
 					end
-				else
-					break
 				end
 			end
 			if lastpc == -1 then return end
@@ -448,8 +447,8 @@ function dynarec.compile(chunk, hookemit)
 		local function processExpPart(expPart)
 			print("processExpPart",expPart.pc, expPart.inlined and "already inlined" or "not inlined")
 			if not expPart.inlined then
-				return expPart.preprocessedExpdef:gsub("|R(%d+)|", function(r)
-					if dynarec.attemptExpressionOptimization then
+				return expPart.preprocessedExpdef:gsub("|R(F?)(%d+)|", function(force, r)
+					if force or dynarec.attemptExpressionOptimization then
 						r = tonumber(r)
 						local fu = getFirstUseBefore(r,expPart.pc)
 						print("First usage of r"..r.." before "..expPart.pc..":",fu)
@@ -464,19 +463,36 @@ function dynarec.compile(chunk, hookemit)
 				end)
 			end
 		end
-		while i >= s do
-			--go through all the usages at this point--
-			local expPart = expParts[i]
-			local e = processExpPart(expPart)
-			if e then
-				if expPart.ret then
-					regval[expPart.ret] = e
-					table.insert(toemit,1,registerPrefix.."r"..expPart.ret.." = "..e)
-				else
-					table.insert(toemit,1,e)
+		if dynarec.attemptExpressionOptimization then
+			while i >= s do
+				local expPart = expParts[i]
+				local e = processExpPart(expPart)
+				if e then
+					if expPart.ret then
+						regval[expPart.ret] = e
+						table.insert(toemit,1,registerPrefix.."r"..expPart.ret.." = "..e)
+					else
+						table.insert(toemit,1,e)
+					end
 				end
+				i = i-1
 			end
-			i = i-1
+		else
+			i = s
+			while i <= e do
+				local expPart = expParts[i]
+				local e = processExpPart(expPart)
+				if e then
+					if expPart.ret then
+						regval[expPart.ret] = e
+						toemit[#toemit+1] = registerPrefix.."r"..expPart.ret.." = "..e
+					else
+						toemit[#toemit+1] = e
+					end
+					print(toemit[#toemit])
+				end
+				i = i+1
+			end
 		end
 		return regval[lastreg],regval,usedAt,lastreg,i,toemit
 	end

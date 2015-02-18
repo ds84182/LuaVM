@@ -8,7 +8,7 @@ end
 
 local sbc = string.dump(function(...)
 	--local a = b and 5 or 6
-	local a
+	--[[local a
 	if b then
 		a = 5
 		b = 8
@@ -19,7 +19,7 @@ local sbc = string.dump(function(...)
 	else
 		a = 9
 	end
-	print(a,b)
+	print(a,b)]]
 	--[[local a
 	if b then
 		a = 5
@@ -45,10 +45,9 @@ local sbc = string.dump(function(...)
 		i = i+1
 	end]]
 	--print("hai")
-	--while ret_true() do
-	--[[while true do
-		print("RET TRUE!")
-	end]]
+	while ret_true() do
+		--print("RET TRUE!")
+	end
 end)
 local bc = bytecode.load(sbc)
 
