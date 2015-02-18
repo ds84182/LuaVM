@@ -7,6 +7,7 @@ end
 
 dynarec = {}
 dynarec.debug = true
+dynarec.attemptExpressionOptimization = false
 
 local function debug(...)
 	if dynarec.debug then
@@ -436,14 +437,18 @@ function dynarec.compile(chunk, hookemit)
 			print("processExpPart",expPart.pc, expPart.inlined and "already inlined" or "not inlined")
 			if not expPart.inlined then
 				return expPart.preprocessedExpdef:gsub("|R(%d+)|", function(r)
-					r = tonumber(r)
-					local fu = getFirstUseBefore(r,expPart.pc)
-					print("First usage of r"..r.." before "..expPart.pc..":",fu)
-					local lu = getLastUseIn(r,fu,expPart.pc)
-					print("Last usage of r"..r.." before "..expPart.pc..":",lu)
-					local p = processExpPart(expParts[lu])
-					expParts[lu].inlined = true
-					return p
+					if dynarec.attemptExpressionOptimization then
+						r = tonumber(r)
+						local fu = getFirstUseBefore(r,expPart.pc)
+						print("First usage of r"..r.." before "..expPart.pc..":",fu)
+						local lu = getLastUseIn(r,fu,expPart.pc)
+						print("Last usage of r"..r.." before "..expPart.pc..":",lu)
+						local p = processExpPart(expParts[lu])
+						expParts[lu].inlined = true
+						return p
+					else
+						return registerPrefix.."r"..r
+					end
 				end)
 			end
 		end
@@ -497,8 +502,8 @@ function dynarec.compile(chunk, hookemit)
 				end
 			end
 			if tj then
+				local expr,rv = generateExpression(opc-1, tj-1)
 				if cond then
-					local _,rv = generateExpression(opc-1, tj-1)
 					emitf("while%s %s%s%s do",a == 1 and " not" or "", b > 255 and formatConstant(constants[b-256]) or rv[b],operatorExpression[to], c > 255 and formatConstant(constants[c-256]) or rv[c])
 					clearExpressions()
 					tabs = tabs+1
@@ -511,7 +516,7 @@ function dynarec.compile(chunk, hookemit)
 					clearExpressions()
 					emit("end")
 				else
-					emitf("while%s %s do",c == 1 and " not" or "",generateExpression(opc-1, tj-1))
+					emitf("while%s %s do",c == 1 and " not" or "",rv[a])
 					clearExpressions()
 					tabs = tabs+1
 					pc = tj+2
