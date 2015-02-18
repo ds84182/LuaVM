@@ -34,6 +34,7 @@ local sbc = string.dump(function(...)
 	local b = 4
 	local c = 2
 	local m = (a+b+c)/3
+	print(m)
 	--[[local i = 1
 	while i < 8 do
 		print(i)

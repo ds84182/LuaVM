@@ -345,13 +345,15 @@ function dynarec.compile(chunk, hookemit)
 			local lastpc = s
 			for i, v in pairs(usedAt[r]) do
 				if i > s and i < e then
-					lastpc = i
+					lastpc = math.max(lastpc,i)
 				end
 			end
 			return lastpc
 		end
 		local function getFirstUseBefore(r,pc)
 			local lastpc = -1
+			for i, v in pairs(usedAt[r]) do print("UA",r,i) end
+			for i, v in pairs(setAt[r]) do print("SA",r,i) end
 			for i, v in pairs(setAt[r]) do
 				if i < pc then
 					if not usedAt[r][i] then
@@ -436,8 +438,8 @@ function dynarec.compile(chunk, hookemit)
 				return expPart.preprocessedExpdef:gsub("|R(%d+)|", function(r)
 					r = tonumber(r)
 					local fu = getFirstUseBefore(r,expPart.pc)
-					local lu = getLastUseIn(r,fu,expPart.pc)
 					print("First usage of r"..r.." before "..expPart.pc..":",fu)
+					local lu = getLastUseIn(r,fu,expPart.pc)
 					print("Last usage of r"..r.." before "..expPart.pc..":",lu)
 					local p = processExpPart(expParts[lu])
 					expParts[lu].inlined = true
@@ -452,9 +454,9 @@ function dynarec.compile(chunk, hookemit)
 			if e then
 				if expPart.ret then
 					regval[expPart.ret] = e
-					toemit[#toemit+1] = registerPrefix.."r"..expPart.ret.." = "..e
+					table.insert(toemit,1,registerPrefix.."r"..expPart.ret.." = "..e)
 				else
-					toemit[#toemit+1] = e
+					table.insert(toemit,1,e)
 				end
 			end
 			i = i-1
@@ -535,8 +537,8 @@ function dynarec.compile(chunk, hookemit)
 				clearExpressions()
 				emit("end")
 			end
-		elseif o == MOVE then
-			emitf("%sr%d=%sr%d",registerPrefix,a,registerPrefix,b)
+		--[[elseif o == MOVE then
+			emitf("%sr%d=%sr%d",registerPrefix,a,registerPrefix,b)]]
 		elseif o == LOADNIL then
 			local i = a
 			emitf("%s=nil",string.rep(registerPrefix.."r,",a-c):sub(1,-2):gsub("r",function() i = i+1 return "r"..(i-1) end))
@@ -628,7 +630,7 @@ function dynarec.compile(chunk, hookemit)
 			R[a] = R[b][RK(c)]
 		elseif o == SETTABLE then
 			R[a][RK(b)] = RK(c)
-		elseif o == ADD or o == SUB or o == MUL or o == DIV or o == MOD or o == POW or o == GETGLOBAL or o == LEN or o == LOADK or o == NOT or o == UNM or o == CALL then
+		elseif o == MOVE or o == ADD or o == SUB or o == MUL or o == DIV or o == MOD or o == POW or o == GETGLOBAL or o == LEN or o == LOADK or o == NOT or o == UNM or o == CALL then
 			--R[a] = RK(b)+RK(c)
 			--start set routine--
 			--find all arithmetic opcodes that use the same destination register to enable operation chaining--
@@ -636,7 +638,7 @@ function dynarec.compile(chunk, hookemit)
 			while true do
 				local no,na,nb,nc = nextInst(cpc)
 				if lookForJump(cpc,true) then print("breaking, has jump to") break end
-				if no == ADD or no == SUB or no == MUL or no == DIV or no == MOD or no == POW or no == GETGLOBAL or no == LEN or no == LOADK or no == NOT or no == UNM or no == CALL then
+				if no == MOVE or no == ADD or no == SUB or no == MUL or no == DIV or no == MOD or no == POW or no == GETGLOBAL or no == LEN or no == LOADK or no == NOT or no == UNM or no == CALL then
 					cpc = cpc+1
 				else
 					break
