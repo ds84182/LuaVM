@@ -58,6 +58,8 @@ function dynarec.compile(chunk, hookemit)
 	local alreadyFound = {}
 	local lastExpressions = {}
 	local lastExpressionEmit = {}
+	local blockLimit
+	local blockLimitStack = {}
 	
 	local function makeRandomString()
 		local s = {}
@@ -183,6 +185,16 @@ function dynarec.compile(chunk, hookemit)
 			lastExpressions[i] = nil
 			lastExpressionEmit[i] = nil
 		end
+	end
+	
+	local function pushBlockLimit(pc)
+		blockLimitStack[#blockLimitStack+1] = blockLimit
+		blockLimit = pc
+	end
+	
+	local function popBlockLimit()
+		blockLimit = blockLimitStack[#blockLimitStack]
+		blockLimitStack[#blockLimitStack] = nil
 	end
 	
 	--instruction constants--
@@ -508,9 +520,11 @@ function dynarec.compile(chunk, hookemit)
 					clearExpressions()
 					tabs = tabs+1
 					pc = tj+2
+					pushBlockLimit(fj)
 					while pc < fj do
 						generateInstruction(nextInst())
 					end
+					popBlockLimit()
 					pc = pc+1
 					tabs = tabs-1
 					clearExpressions()
@@ -520,9 +534,11 @@ function dynarec.compile(chunk, hookemit)
 					clearExpressions()
 					tabs = tabs+1
 					pc = tj+2
+					pushBlockLimit(fj)
 					while pc < fj do
 						generateInstruction(nextInst())
 					end
+					popBlockLimit()
 					pc = pc+1
 					tabs = tabs-1
 					clearExpressions()
@@ -534,9 +550,11 @@ function dynarec.compile(chunk, hookemit)
 				clearExpressions()
 				tabs = tabs+1
 				pc = pc-1
+				pushBlockLimit(fj)
 				while pc < fj do
 					generateInstruction(nextInst())
 				end
+				popBlockLimit()
 				pc = pc+1
 				tabs = tabs-1
 				clearExpressions()
@@ -586,9 +604,11 @@ function dynarec.compile(chunk, hookemit)
 				tabs = tabs+1
 				pc = pc+2
 				local to = pc+jb
+				pushBlockLimit(to)
 				while pc < to do
 					generateInstruction(nextInst())
 				end
+				popBlockLimit()
 				tabs = tabs-1
 				clearExpressions()
 				emit("end")
@@ -603,9 +623,11 @@ function dynarec.compile(chunk, hookemit)
 				tabs = tabs+1
 				--emit sucess opcodes--
 				local to = pc+jb-1
+				pushBlockLimit(to)
 				while pc < to do
 					generateInstruction(nextInst())
 				end
+				popBlockLimit()
 				jo,ja,jb,jc = nextInst()
 				if jo == JMP then
 					tabs = tabs-1
@@ -615,9 +637,11 @@ function dynarec.compile(chunk, hookemit)
 					tabs = tabs+1
 					--emit failure opcodes--
 					local to = pc+jb
+					pushBlockLimit(to)
 					while pc < to do
 						generateInstruction(nextInst())
 					end
+					popBlockLimit()
 				else
 					pc = pc-1
 					generateInstruction(nextInst())
@@ -641,6 +665,7 @@ function dynarec.compile(chunk, hookemit)
 			--find all arithmetic opcodes that use the same destination register to enable operation chaining--
 			local cpc = pc
 			while true do
+				if blockLimit and cpc >= blockLimit then break end
 				local no,na,nb,nc = nextInst(cpc)
 				if lookForJump(cpc,true) then print("breaking, has jump to") break end
 				if no == MOVE or no == ADD or no == SUB or no == MUL or no == DIV or no == MOD or no == POW or no == GETGLOBAL or no == LEN or no == LOADK or no == NOT or no == UNM or no == CALL then

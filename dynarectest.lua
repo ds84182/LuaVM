@@ -8,7 +8,7 @@ end
 
 local sbc = string.dump(function(...)
 	--local a = b and 5 or 6
-	--[[local a
+	local a
 	if b then
 		a = 5
 		b = 8
@@ -18,7 +18,8 @@ local sbc = string.dump(function(...)
 		a = 3
 	else
 		a = 9
-	end]]
+	end
+	print(a,b)
 	--[[local a
 	if b then
 		a = 5
@@ -30,14 +31,14 @@ local sbc = string.dump(function(...)
 	while one do
 		a = 6
 	end]]
-	local a = 6
+	--[[local a = 6
 	local b = 4
 	local c = 2
 	local m = (a+b+c)/3
 	print(m)
 	while not m do
 	
-	end
+	end]]
 	--[[local i = 1
 	while i < 8 do
 		print(i)
