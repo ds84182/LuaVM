@@ -217,7 +217,7 @@ function bytecode.load(bc)
 			c.locals = localList()
 			c.upvalues = upvalueList()
 		else
-			local function upvalueList52()
+			local function upvalueDefinitionList()
 				local upvalues = {}
 				for i=1, integer() do
 					upvalues[i-1] = {instack=u1(),idx=u1()}
@@ -233,11 +233,11 @@ function bytecode.load(bc)
 			c.instructions = instructionList()
 			c.constants = constantList()
 			c.functionPrototypes = functionPrototypeList()
-			c.upvalues52 = upvalueList52()
+			c.upvalues = upvalueDefinitionList()
 			c.name = us()
 			c.sourceLines = sourceLineList()
 			c.locals = localList()
-			c.upvalues = upvalueList()
+			c.upvaluesDebug = upvalueList()
 		end
 		return c
 	end
