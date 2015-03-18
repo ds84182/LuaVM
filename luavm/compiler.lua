@@ -9,7 +9,7 @@ end
 compiler = {}
 compiler.debug = false
 
-function debug(...)
+local function debug(...)
 	if compiler.debug then
 		print(...)
 	end

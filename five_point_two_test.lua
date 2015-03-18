@@ -1,5 +1,5 @@
-require "bytecode"
-require "vm"
+require "luavm.bytecode"
+require "luavm.vm"
 
 local testbc = string.dump(function() print "Hello" end)
 io.open("testbc.luac","wb"):write(testbc)

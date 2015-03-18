@@ -9,6 +9,10 @@ local supportedTypes = string.dump(function() end):sub(7,12)
 
 bytecode = {}
 bytecode.debug = false
+bytecode.lua51 = {}
+bytecode[0x51] = bytecode.lua51
+bytecode.lua52 = {}
+bytecode[0x52] = bytecode.lua52
 
 local function debug(...)
 	if bytecode.debug then
@@ -16,56 +20,178 @@ local function debug(...)
 	end
 end
 
-local instructionNames = {
-	[0]="MOVE","LOADK","LOADBOOL","LOADNIL",
-	"GETUPVAL","GETGLOBAL","GETTABLE",
-	"SETGLOBAL","SETUPVAL","SETTABLE","NEWTABLE",
-	"SELF","ADD","SUB","MUL","DIV","MOD","POW","UNM","NOT","LEN","CONCAT",
-	"JMP","EQ","LT","LE","TEST","TESTSET","CALL","TAILCALL","RETURN",
-	"FORLOOP","FORPREP","TFORLOOP","SETLIST","CLOSE","CLOSURE","VARARG"
-}
+do
+	local instructionNames = {
+		[0]="MOVE","LOADK","LOADBOOL","LOADNIL",
+		"GETUPVAL","GETGLOBAL","GETTABLE",
+		"SETGLOBAL","SETUPVAL","SETTABLE","NEWTABLE",
+		"SELF","ADD","SUB","MUL","DIV","MOD","POW","UNM","NOT","LEN","CONCAT",
+		"JMP","EQ","LT","LE","TEST","TESTSET","CALL","TAILCALL","RETURN",
+		"FORLOOP","FORPREP","TFORLOOP","SETLIST","CLOSE","CLOSURE","VARARG"
+	}
 
-local ins = {}
-for i, v in pairs(instructionNames) do ins[v] = i end
+	local ins = {}
+	for i, v in pairs(instructionNames) do ins[v] = i end
 
-local iABC = 0
-local iABx = 1
-local iAsBx = 2
+	bytecode.lua51.instructionNames = instructionNames
+	bytecode.lua51.instructions = ins
+	bytecode.lua51.defaultReturn = 8388638
 
-local instructionFormats = {
-	[0]=iABC,iABx,iABC,iABC,
-	iABC,iABx,iABC,
-	iABx,iABC,iABC,iABC,
-	iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,
-	iAsBx,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,
-	iAsBx,iAsBx,iABC,iABC,iABC,iABx,iABC
-}
+	local iABC = 0
+	local iABx = 1
+	local iAsBx = 2
 
-bytecode.defaultReturn = 8388638
+	local instructionFormats = {
+		[0]=iABC,iABx,iABC,iABC,
+		iABC,iABx,iABC,
+		iABx,iABC,iABC,iABC,
+		iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,
+		iAsBx,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,
+		iAsBx,iAsBx,iABC,iABC,iABC,iABx,iABC
+	}
 
-function bytecode.encode(inst,a,b,c)
-	inst = type(inst) == "string" and ins[inst] or inst
-	local format = instructionFormats[inst]
-	return
-		format == iABC and
-		bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b,0x1FF),23), bit.blshift(bit.band(c,0x1FF),14)) or
-		format == iABx and
-		bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b,0x3FFFF),14)) or
-		bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b+131071,0x3FFFF),14))
-end
+	--instruction constants--
+	local MOVE = 0
+	local LOADK = 1
+	local LOADBOOL = 2
+	local LOADNIL = 3
+	local GETUPVAL = 4
+	local GETGLOBAL = 5
+	local GETTABLE = 6
+	local SETGLOBAL = 7
+	local SETUPVAL = 8
+	local SETTABLE = 9
+	local NEWTABLE = 10
+	local SELF = 11
+	local ADD = 12
+	local SUB = 13
+	local MUL = 14
+	local DIV = 15
+	local MOD = 16
+	local POW = 17
+	local UNM = 18
+	local NOT = 19
+	local LEN = 20
+	local CONCAT = 21
+	local JMP = 22
+	local EQ = 23
+	local LT = 24
+	local LE = 25
+	local TEST = 26
+	local TESTSET = 27
+	local CALL = 28
+	local TAILCALL = 29
+	local RETURN = 30
+	local FORLOOP = 31
+	local FORPREP = 32
+	local TFORLOOP = 33
+	local SETLIST = 34
+	local CLOSE = 35
+	local CLOSURE = 36
+	local VARARG = 37
 
-function bytecode.decode(inst)
-	local opcode = bit.band(inst,0x3F)
-	local format = instructionFormats[opcode]
-	if format == iABC then
-		return opcode, bit.band(bit.brshift(inst,6),0xFF), bit.band(bit.brshift(inst,23),0x1FF), bit.band(bit.brshift(inst,14),0x1FF)
-	elseif format == iABx then
-		return opcode, bit.band(bit.brshift(inst,6),0xFF), bit.band(bit.brshift(inst,14),0x3FFFF)
-	elseif format == iAsBx then
-		local sBx = bit.band(bit.brshift(inst,14),0x3FFFF)-131071
-		return opcode, bit.band(bit.brshift(inst,6),0xFF), sBx
-	else
-		error(opcode.." "..format)
+	function bytecode.lua51.encode(inst,a,b,c)
+		inst = type(inst) == "string" and ins[inst] or inst
+		local format = instructionFormats[inst]
+		return
+			format == iABC and
+			bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b,0x1FF),23), bit.blshift(bit.band(c,0x1FF),14)) or
+			format == iABx and
+			bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b,0x3FFFF),14)) or
+			bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b+131071,0x3FFFF),14))
+	end
+
+	function bytecode.lua51.decode(inst)
+		local opcode = bit.band(inst,0x3F)
+		local format = instructionFormats[opcode]
+		if format == iABC then
+			return opcode, bit.band(bit.brshift(inst,6),0xFF), bit.band(bit.brshift(inst,23),0x1FF), bit.band(bit.brshift(inst,14),0x1FF)
+		elseif format == iABx then
+			return opcode, bit.band(bit.brshift(inst,6),0xFF), bit.band(bit.brshift(inst,14),0x3FFFF)
+		elseif format == iAsBx then
+			local sBx = bit.band(bit.brshift(inst,14),0x3FFFF)-131071
+			return opcode, bit.band(bit.brshift(inst,6),0xFF), sBx
+		else
+			error(opcode.." "..format)
+		end
+	end
+	
+	bytecode.lua51.patcher = {}
+
+	local function patchJumpsAndAdd(bc, pc, op)
+		for i=0, #bc.instructions do
+			local o,a,b,c = bytecode.decode(bc.instructions[i])
+			if o == LOADBOOL then
+				if c ~= 0 then
+					if i+1 == pc then
+						error("TODO: Patch LOADBOOL")
+					end
+				end
+			elseif o == JMP then
+				if (i < pc and i+b+1 > pc) then
+					b = b+1 --since this gets shifted forward...
+				elseif (i > pc and i+b+1 <= pc) then
+					b = b-1 --since this gets shifted backward...
+				end
+			elseif o == TEST then
+				if i+1 == pc then
+					error("TODO: Patch TEST")
+				end
+			elseif o == TESTSET then
+				if i+1 == pc then
+					error("TODO: Patch TESTSET")
+				end
+			elseif o == FORLOOP then
+				if (i < pc and i+b+1 > pc) then
+					b = b+1 --since this gets shifted forward...
+				elseif (i > pc and i+b+1 <= pc) then
+					b = b-1 --since this gets shifted backward...
+				end
+			elseif o == FORPREP then
+				if (i < pc and i+b+1 > pc) then
+					b = b+1 --since this gets shifted forward...
+				elseif (i > pc and i+b+1 <= pc) then
+					b = b-1 --since this gets shifted backward...
+				end
+			elseif o == TFORPREP then
+				if i+1 == pc then
+					error("TODO: Patch TFORPREP")
+				end
+			end
+			bc.instructions[i] = bytecode.encode(o,a,b,c)
+			print(i,bc.instructions[i])
+		end
+	
+		for i=#bc.instructions, pc, -1 do
+			bc.instructions[i+1] = bc.instructions[i]
+			bc.sourceLines[i+1] = bc.sourceLines[i]
+		end
+		bc.instructions[pc] = op
+	end
+
+	function bytecode.lua51.patcher.insert(bc, pc, inst)
+		--insert commands, fix jump targets--
+		patchJumpsAndAdd(bc, pc, inst)
+	end
+
+	function bytecode.lua51.patcher.replace(bc, pc, inst)
+		bc.instructions[pc] = inst
+	end
+
+	function bytecode.lua51.patcher.find(bc, pc, o)
+		for i=pc+1, #bc.instructions do
+			local no = bytecode.decode(bc.instructions[i])
+			if no == o then
+				return i
+			end
+		end
+	end
+
+	function bytecode.lua51.patcher.addConstant(bc, const)
+		--try find constant...---
+		for i, v in pairs(bc.constants) do if v == const then return i end end
+		bc.constants[#bc.constants+1] = const
+		return #bc.constants
 	end
 end
 
@@ -216,7 +342,7 @@ function bytecode.load(bc)
 			c.sourceLines = sourceLineList()
 			c.locals = localList()
 			c.upvalues = upvalueList()
-		else
+		elseif version == 0x52 then
 			local function upvalueDefinitionList()
 				local upvalues = {}
 				for i=1, integer() do
@@ -238,6 +364,8 @@ function bytecode.load(bc)
 			c.sourceLines = sourceLineList()
 			c.locals = localList()
 			c.upvaluesDebug = upvalueList()
+		else
+			error("Unknown lua version.")
 		end
 		return c
 	end
@@ -246,7 +374,7 @@ end
 
 local header = "\27Lua"..string.char(0x51)..string.char(0)..supportedTypes
 function bytecode.save(chunk)
-	assert(chunk.version == 0x51, "Cannot save newer Lua versions! Sorry!")
+	assert(chunk.version == 0x51, "Cannot save Lua versions greater than 5.1! Sorry!")
 	local bc = {header}
 	
 	local function w1(b)
@@ -366,28 +494,38 @@ function bytecode.save(chunk)
 	return table.concat(bc)
 end
 
-function bytecode.new()
-	return {
-		version = 0x51,
-		lineDefined = 0,
-		isvararg = 2,
-		sourceLines = {},
-		nparam = 0,
-		lastLineDefined = 0,
-		maxStack = 2,
-		upvalues = {},
-		instructions = {[0]=8388638},
-		locals = {},
-		functionPrototypes = {},
-		nupval = 0,
-		name = "",
-		constants = {}
-	}
+function bytecode.new(version)
+	version = version or 0x51
+	
+	if version == 0x51 then
+		return
+		{
+			version = 0x51,
+			lineDefined = 0,
+			isvararg = 2,
+			sourceLines = {},
+			nparam = 0,
+			lastLineDefined = 0,
+			maxStack = 2,
+			upvalues = {},
+			instructions = {[0]=8388638},
+			locals = {},
+			functionPrototypes = {},
+			nupval = 0,
+			name = "",
+			constants = {}
+		}
+	elseif version == 0x52 then
+		return {"TODO"}
+	else
+		error("Cannot create bytecode for "..string.format("%X",version)..".")
+	end
 end
 
 function bytecode.dump(bc)
+	local ver = bytecode[bc.version]
 	for i=0, #bc.instructions do
-		local o,a,b,c = bytecode.decode(bc.instructions[i])
-		print(i, instructionNames[o], a, b, c)
+		local o,a,b,c = ver.decode(ver.instructions[i])
+		print(i, ver.instructionNames[o], a, b, c)
 	end
 end

@@ -1,6 +1,6 @@
-require "bytecode"
-require "dynarec"
-require "vm"
+require "luavm.bytecode"
+require "luavm.dynarec"
+require "luavm.vm"
 
 function ret_true()
 	return true
@@ -47,6 +47,13 @@ local sbc = string.dump(function(...)
 	--print("hai")
 	while ret_true() do
 		--print("RET TRUE!")
+		while true do
+			local i = 1
+			while i < 8 do
+				print(i)
+				i = i+1
+			end
+		end
 	end
 end)
 local bc = bytecode.load(sbc)
@@ -59,6 +66,6 @@ dynarec.compile(bc)
 ,"\n")
 
 print(dyncode)
-loadstring(dyncode)()
-loadstring(sbc)()
-vm.run(bc)
+--loadstring(dyncode)()
+--loadstring(sbc)()
+--vm.run(bc)

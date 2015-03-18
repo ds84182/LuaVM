@@ -275,6 +275,24 @@ function dynarec.compile(chunk, hookemit)
 		return false
 	end
 	
+	local function lookForNextJump(to,at)
+		--looks into the future for a jump back to here--
+		local i = at
+		while true do
+			local c = code[i+pc-1]
+			if not c then break end
+			if band(c,0x3F) == JMP then
+				local o,a,b,c = decodeInstruction(c)
+				print(i+pc+b,to)
+				if i+pc+b == to then
+					return i+pc-1
+				end
+			end
+			i = i+1
+		end
+		return false
+	end
+	
 	local generateChunk
 	
 	local expressionDefs = {
@@ -451,6 +469,7 @@ function dynarec.compile(chunk, hookemit)
 					if force or dynarec.attemptExpressionOptimization then
 						r = tonumber(r)
 						local fu = getFirstUseBefore(r,expPart.pc)
+						if not fu then return registerPrefix.."r"..r end
 						print("First usage of r"..r.." before "..expPart.pc..":",fu)
 						local lu = getLastUseIn(r,fu,expPart.pc)
 						print("Last usage of r"..r.." before "..expPart.pc..":",lu)
@@ -508,13 +527,14 @@ function dynarec.compile(chunk, hookemit)
 			--find test jump combo--
 			local tj = find(TEST, JMP)
 			local cond = false
+			local jump2start = false
 			if not tj then
 				cond = true
 				tj = find(LT,JMP)
 				if not tj then
 					tj = find(LE,JMP)
 					if not tj then
-						tj = find(EQ,JUMP)
+						tj = find(EQ,JMP)
 					end
 				end
 			end
@@ -522,36 +542,72 @@ function dynarec.compile(chunk, hookemit)
 				--read the jump, verify that it jumps directly after fj--
 				to,ta,tb,tc = nextInst(tj)
 				jo,ja,jb,jc = nextInst(tj+1)
+				print(tj+2+jb,fj+1)
 				if tj+2+jb == fj+1 then
 					print("Jump valid")
 				else
-					tj = nil
 					print("Jump invalid")
+					if tj+2+jb == opc-1 then
+						print("Jump goes to start")
+						jump2start = true
+						fj = lookForNextJump(pc-1,fj)
+					else
+						tj = nil
+					end
 				end
 			end
 			if tj then
-				local expr,rv = generateExpression(opc-1, tj-1)
+				local expr,rv = generateExpression(opc-1, jump2start and tj-2 or tj-1)
 				if cond then
-					emitf("while%s %s%s%s do",a == 1 and " not" or "", b > 255 and formatConstant(constants[b-256]) or rv[b],operatorExpression[to], c > 255 and formatConstant(constants[c-256]) or rv[c])
-					clearExpressions()
-					tabs = tabs+1
-					pc = tj+2
-					pushBlockLimit(fj)
-					while pc < fj do
-						generateInstruction(nextInst())
+					if jump2start then
+						emitf("while true do")
+						tabs = tabs+1
+						pc = opc-1
+						clearExpressions()
+						pushBlockLimit(tj-1)
+						print("WELP",pc,tj-1)
+						while pc <= tj-1 do
+							print("WELP",pc,tj-1)
+							generateInstruction(nextInst())
+						end
+						popBlockLimit()
+						clearExpressions() --TODO: Push new expressions instead
+						emitf("while %s%s%s do", tb > 255 and formatConstant(constants[tb-256]) or rv[tb],operatorExpression[to], tc > 255 and formatConstant(constants[tc-256]) or rv[tc])
+						tabs = tabs+1
+						pc = tj+1
+						pushBlockLimit(fj-1)
+						while pc < fj-1 do
+							generateInstruction(nextInst())
+						end
+						popBlockLimit()
+						pc = pc+1
+						tabs = tabs-1
+						clearExpressions()
+						emit("end")
+						tabs = tabs-1
+						emit("end")
+					else
+						emitf("while%s %s%s%s do",a == 1 and " not" or "", b > 255 and formatConstant(constants[b-256]) or rv[b],operatorExpression[to], c > 255 and formatConstant(constants[c-256]) or rv[c])
+						clearExpressions()
+						tabs = tabs+1
+						pc = tj+2
+						pushBlockLimit(fj-1)
+						while pc < fj-1 do
+							generateInstruction(nextInst())
+						end
+						popBlockLimit()
+						pc = pc+1
+						tabs = tabs-1
+						clearExpressions()
+						emit("end")
 					end
-					popBlockLimit()
-					pc = pc+1
-					tabs = tabs-1
-					clearExpressions()
-					emit("end")
 				else
 					emitf("while%s %s do",c == 1 and " not" or "",rv[a])
 					clearExpressions()
 					tabs = tabs+1
 					pc = tj+2
-					pushBlockLimit(fj)
-					while pc < fj do
+					pushBlockLimit(fj-1)
+					while pc < fj-1 do
 						generateInstruction(nextInst())
 					end
 					popBlockLimit()
@@ -562,7 +618,7 @@ function dynarec.compile(chunk, hookemit)
 				end
 			else
 				--if it doesn't (or if tj is nil) generate a while true do loop (lua does loop optimization)--
-				emit("while true do")
+				emitf("while%s true do",c == 1 and " not" or "")
 				clearExpressions()
 				tabs = tabs+1
 				pc = pc-1

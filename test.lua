@@ -1,5 +1,5 @@
-require "bytecode"
-require "vm"
+require "luavm.bytecode"
+require "luavm.vm"
 
 function pass(...)
 	return ...
