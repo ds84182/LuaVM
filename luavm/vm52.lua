@@ -75,7 +75,7 @@ do
 	}
 	
 	function vm.lua52.run(chunk, args, upvals, globals, hook)
-		if chunk.version ~= 0x52 then error(string.format("attempt to run %x bytecode in 52",chunk.version))) end
+		if chunk.version ~= 0x52 then error(string.format("attempt to run %x bytecode in 52",chunk.version)) end
 		local R = {}
 		local top = 0
 		local pc = 0

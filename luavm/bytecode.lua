@@ -525,7 +525,7 @@ end
 function bytecode.dump(bc)
 	local ver = bytecode[bc.version]
 	for i=0, #bc.instructions do
-		local o,a,b,c = ver.decode(ver.instructions[i])
+		local o,a,b,c = ver.decode(bc.instructions[i])
 		print(i, ver.instructionNames[o], a, b, c)
 	end
 end

@@ -24,10 +24,10 @@ if native then
 	end
 else
 	require "luavm.bytecode"
-	require "luavm.vm"
+	require "luavm.vm51"
 	for i, v in pairs(tests) do
 		arg = {}
-		local s, e = pcall(vm.run,bytecode.load(string.dump(loadfile("test/"..v..".lua"))))
+		local s, e = pcall(vm.lua51.run,bytecode.load(string.dump(loadfile("test/"..v..".lua"))))
 		if not s then print(e) end
 	end
 end

@@ -1,11 +1,11 @@
 require "luavm.bytecode"
-require "luavm.vm"
+require "luavm.vm51"
 
 function pass(...)
 	return ...
 end
 
-print(vm.run(bytecode.load(string.dump(function(...)
+print(vm.lua51.run(bytecode.load(string.dump(function(...)
 	print(...)
 	local r,e = 4,4
 	local a, b, c = pass(1,2,3)

@@ -1,6 +1,6 @@
 require "luavm.bytecode"
 require "luavm.dynarec"
-require "luavm.vm"
+require "luavm.vm51"
 
 function ret_true()
 	return true

@@ -1,5 +1,5 @@
 require "luavm.bytecode"
-require "luavm.vm"
+require "luavm.vm51"
 
 local bc = bytecode.load(string.dump(function()
 	local r = math.random()
@@ -14,13 +14,13 @@ bytecode.dump(bc)
 
 local c = 0
 for i=1, 3 do
-	c = bytecode.patcher.find(bc, c, bytecode.instructions.LOADK)
+	c = bytecode.lua51.patcher.find(bc, c, bytecode.instructions.LOADK)
 end
 
-bytecode.patcher.insert(bc, c+1, bytecode.encode("LOADK", 4, bytecode.patcher.addConstant(bc, 4)))
-bytecode.patcher.insert(bc, c+2, bytecode.encode("LOADK", 5, bytecode.patcher.addConstant(bc, 5)))
+bytecode.lua51.patcher.insert(bc, c+1, bytecode.encode("LOADK", 4, bytecode.patcher.addConstant(bc, 4)))
+bytecode.lua51.patcher.insert(bc, c+2, bytecode.encode("LOADK", 5, bytecode.patcher.addConstant(bc, 5)))
 bc.maxStack = bc.maxStack+2
-bytecode.patcher.replace(bc, c+3, bytecode.encode("RETURN", 1, 6, 0))
+bytecode.lua51.patcher.replace(bc, c+3, bytecode.encode("RETURN", 1, 6, 0))
 
 bytecode.dump(bc)
 
