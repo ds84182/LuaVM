@@ -11,6 +11,10 @@ closureTest()
 closureTest()
 closureTest()]]
 
+local a,b = "\1",3
+local c = a:byte(1) == b and "five" or "four"
+print(c)
+
 local a = os.clock()
 local c = 0
 local clk = os.clock

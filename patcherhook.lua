@@ -12,8 +12,8 @@ function addHook(func)
 	bc.maxStack = bc.maxStack+1
 	local hookConstant = bytecode.lua51.patcher.addConstant(bc, "_HOOK")
 	
-	local get = bytecode.encode(bytecode.instructions.GETGLOBAL, tempReg, hookConstant)
-	local call = bytecode.encode(bytecode.instructions.CALL, tempReg, 1, 1)
+	local get = bytecode.lua51.encode(bytecode.lua51.instructions.GETGLOBAL, tempReg, hookConstant)
+	local call = bytecode.lua51.encode(bytecode.lua51.instructions.CALL, tempReg, 1, 1)
 	
 	local function tryAddHookAt(pc)
 		bytecode.lua51.patcher.insert(bc,pc,get)
@@ -33,13 +33,13 @@ function addHook(func)
 	--this fixes a problem where "while true do end" could not be patched--
 	local ngg = 0
 	while ngg do
-		ngg = bytecode.lua51.patcher.find(bc, ngg, bytecode.instructions.JMP)
+		ngg = bytecode.lua51.patcher.find(bc, ngg, bytecode.lua51.instructions.JMP)
 		if ngg then
-			local _,a,b,c = bytecode.decode(bc.instructions[ngg])
+			local _,a,b,c = bytecode.lua51.decode(bc.instructions[ngg])
 			if b == -1 then
 				bytecode.lua51.patcher.insert(bc,ngg,get)
 				bytecode.lua51.patcher.insert(bc,ngg+1,call)
-				bytecode.lua51.patcher.replace(bc, ngg+2, bytecode.encode(bytecode.instructions.JMP, 0, -2, 0))
+				bytecode.lua51.patcher.replace(bc, ngg+2, bytecode.lua51.encode(bytecode.lua51.instructions.JMP, 0, -2, 0))
 				ngg = ngg+2
 			end
 		end

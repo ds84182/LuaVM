@@ -106,7 +106,11 @@ do
 		end
 	
 		local function RK(n)
-			return n >= 256 and constants[n-256] or R[n]
+			if n >= 256 then
+				return constants[n-256]
+			else
+				return R[n]
+			end
 		end
 	
 		--instruction constants--
@@ -194,11 +198,11 @@ do
 				elseif o == POW then
 					R[a] = RK(b)^RK(c)
 				elseif o == UNM then
-					R[a] = -RK(c)
+					R[a] = -R[b]
 				elseif o == NOT then
-					R[a] = not RK(c)
+					R[a] = not R[b]
 				elseif o == LEN then
-					R[a] = #RK(c)
+					R[a] = #R[b]
 				elseif o == CONCAT then
 					local sct = {}
 					for i=b, c do sct[#sct+1] = tostring(R[i]) end
@@ -311,9 +315,9 @@ do
 				elseif o == TESTSET then
 					if (not R[b]) ~= (c ~= 0) then
 						R[a] = R[b]
-						pc = pc+1
-					else
 						pc = pc+getsBx(code[pc])+1
+					else
+						pc = pc+1
 					end
 				elseif o == FORPREP then
 					R[a] = R[a]-R[a+2]
@@ -323,8 +327,15 @@ do
 					R[a] = R[a]+step
 					local idx = R[a]
 					local limit = R[a+1]
+					local can
 			
-					if (step < 0 and limit <= idx or idx <= limit) then
+					if step < 0 then
+						can = limit <= idx
+					else
+						can = limit >= idx
+					end
+					
+					if can then
 						pc = pc+b
 						R[a+3] = R[a]
 					end

@@ -14,13 +14,13 @@ bytecode.dump(bc)
 
 local c = 0
 for i=1, 3 do
-	c = bytecode.lua51.patcher.find(bc, c, bytecode.instructions.LOADK)
+	c = bytecode.lua51.patcher.find(bc, c, bytecode.lua51.instructions.LOADK)
 end
 
-bytecode.lua51.patcher.insert(bc, c+1, bytecode.encode("LOADK", 4, bytecode.patcher.addConstant(bc, 4)))
-bytecode.lua51.patcher.insert(bc, c+2, bytecode.encode("LOADK", 5, bytecode.patcher.addConstant(bc, 5)))
+bytecode.lua51.patcher.insert(bc, c+1, bytecode.lua51.encode("LOADK", 4, bytecode.lua51.patcher.addConstant(bc, 4)))
+bytecode.lua51.patcher.insert(bc, c+2, bytecode.lua51.encode("LOADK", 5, bytecode.lua51.patcher.addConstant(bc, 5)))
 bc.maxStack = bc.maxStack+2
-bytecode.lua51.patcher.replace(bc, c+3, bytecode.encode("RETURN", 1, 6, 0))
+bytecode.lua51.patcher.replace(bc, c+3, bytecode.lua51.encode("RETURN", 1, 6, 0))
 
 bytecode.dump(bc)
 

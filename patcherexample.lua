@@ -20,22 +20,22 @@ function stalkUpvalues(func)
 	--patch all GETUPVAL to GETGLOBAL--
 	local ngg = 0
 	while ngg do
-		ngg = bytecode.lua51.patcher.find(bc, ngg, bytecode.instructions.GETUPVAL)
+		ngg = bytecode.lua51.patcher.find(bc, ngg, bytecode.lua51.instructions.GETUPVAL)
 		if ngg then
-			local _,a,b,c = bytecode.decode(bc.instructions[ngg])
+			local _,a,b,c = bytecode.lua51.decode(bc.instructions[ngg])
 			local const = bytecode.lua51.patcher.addConstant(bc, "__UPVALUE_"..(b+1))
-			bytecode.lua51.patcher.replace(bc, ngg, bytecode.encode(bytecode.instructions.GETGLOBAL, a, const, 0))
+			bytecode.lua51.patcher.replace(bc, ngg, bytecode.lua51.encode(bytecode.lua51.instructions.GETGLOBAL, a, const, 0))
 		end
 	end
 	
 	--patch all SETUPVAL to SETGLOBAL--
 	local ngg = 0
 	while ngg do
-		ngg = bytecode.lua51.patcher.find(bc, ngg, bytecode.instructions.SETUPVAL)
+		ngg = bytecode.lua51.patcher.find(bc, ngg, bytecode.lua51.instructions.SETUPVAL)
 		if ngg then
-			local _,a,b,c = bytecode.decode(bc.instructions[ngg])
+			local _,a,b,c = bytecode.lua51.decode(bc.instructions[ngg])
 			local const = bytecode.lua51.patcher.addConstant(bc, "__UPVALUE_"..(b+1))
-			bytecode.lua51.patcher.replace(bc, ngg, bytecode.encode(bytecode.instructions.SETGLOBAL, a, const, 0))
+			bytecode.lua51.patcher.replace(bc, ngg, bytecode.lua51.encode(bytecode.lua51.instructions.SETGLOBAL, a, const, 0))
 		end
 	end
 	

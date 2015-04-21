@@ -120,7 +120,7 @@ do
 
 	local function patchJumpsAndAdd(bc, pc, op)
 		for i=0, #bc.instructions do
-			local o,a,b,c = bytecode.decode(bc.instructions[i])
+			local o,a,b,c = bytecode.lua51.decode(bc.instructions[i])
 			if o == LOADBOOL then
 				if c ~= 0 then
 					if i+1 == pc then
@@ -158,7 +158,7 @@ do
 					error("TODO: Patch TFORPREP")
 				end
 			end
-			bc.instructions[i] = bytecode.encode(o,a,b,c)
+			bc.instructions[i] = bytecode.lua51.encode(o,a,b,c)
 			print(i,bc.instructions[i])
 		end
 	
@@ -179,8 +179,12 @@ do
 	end
 
 	function bytecode.lua51.patcher.find(bc, pc, o)
+		if type(o) == "string" then
+			o = ins[o]
+		end
+		
 		for i=pc+1, #bc.instructions do
-			local no = bytecode.decode(bc.instructions[i])
+			local no = bytecode.lua51.decode(bc.instructions[i])
 			if no == o then
 				return i
 			end
@@ -218,7 +222,7 @@ function bytecode.load(bc)
 		idx = idx+8
 		return bit.blshift(d,24)+bit.blshift(c,16)+bit.blshift(b,8)+a
 	end
-	local function double()
+	local function double(f)
 		local x = bc:sub(idx,idx+7)
 		idx = idx+8
 		
@@ -237,6 +241,7 @@ function bytecode.load(bc)
 	end
 	local function us()
 		local size = size_t()
+		--print(size)
 		return ub(size):sub(1,-2)
 	end
 	
@@ -264,7 +269,8 @@ function bytecode.load(bc)
 	local function chunk()
 		local function instructionList()
 			local instructions = {}
-			for i=1, integer() do
+			local count = integer()
+			for i=1, count do
 				instructions[i-1] = u4()
 			end
 			return instructions
@@ -279,7 +285,7 @@ function bytecode.load(bc)
 				elseif type == 1 then
 					constants[i-1] = u1() > 0
 				elseif type == 3 then
-					constants[i-1] = double()
+					constants[i-1] = double(true)
 				elseif type == 4 then
 					constants[i-1] = us()
 				else
