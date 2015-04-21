@@ -8,26 +8,26 @@ Usage
 
 To use LuaVM, first you must meet all the requirements:
 
-* Lua 5.1 or later, later versions need to use a compatibility library
-* A way to generate Lua 5.1 valid bytecode (a ASM suite is comming later)
+* Lua 5.1 and 5.2 are the only versions supported. Unoffical versions of Lua (like LuaJIT, LuaJ, etc.) are not fully supported.
+* A way to generate Lua 5.1 valid bytecode (an ASM suite is in the works, a Lua to bytecode compiler is coming)
 
-Then, you must require the bytecode module and the vm module:
+Then, you must require the modules you need (sorry for the global namespace injections):
 
 ```
-require("bytecode")
-require("vm")
+require("luavm.bytecode")
+require("luavm.vm[your version here, 51 or 52]")
 ```
 
-After that, simply call ```vm.run(bytecode.load([bytecode here]))```
+After that, simply call ```vm.lua[your version here, like 51 or 52].run(bytecode.load([bytecode here]))```
 
 Documentation
 -------------
 
-### bytecode.load(bytecode {string}) [table]
-Loads valid Lua 5.1 bytecode into a table format.
+### bytecode.load(bytecode)
+Loads valid Lua 5.1 or 5.2 bytecode (as a string). Returns a table.
 
-### bytecode.save(loaded bytecode {table}) [string]
-Saves loaded bytecode as valid Lua 5.1 bytecode. This is the absolute inverse of bytecode.load.
+### bytecode.save(bytecode)
+Redumps bytecode tables created from ```bytecode.new``` or ```bytecode.load```. Returns a string.
 
-### vm.run(loaded bytecode {table}, arguments {table}, upvalues {table}, global environment {table}, hook {function})
-Starts running bytecode. Arguments, Upvalues, Globals, and Hooks are optional.Returns whatever the emulated bytecode returns.
+### vm.run(bytecode, arguments, upvalues, globals, hook)
+Starts running bytecode. Arguments, Upvalues, Globals, and Hooks are optional. Returns whatever the emulated bytecode returns. Arguments, upvalues, and globals must be a table. Hook must be a function, it is called every single instruction.
