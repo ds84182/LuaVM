@@ -58,6 +58,7 @@ function dynarec.compile(chunk, hookemit)
 	local alreadyFound = {}
 	local lastExpressions = {}
 	local lastExpressionEmit = {}
+	local lastExpressionMetadata = {}
 	local blockLimit
 	local blockLimitStack = {}
 	
@@ -256,6 +257,7 @@ function dynarec.compile(chunk, hookemit)
 		--looks into the future for a jump back to here--
 		local i = 0
 		while true do
+			if blockLimit and i+pc-1 >= blockLimit then break end
 			local c = code[i+pc-1]
 			if not c then break end
 			if band(c,0x3F) == JMP then
@@ -279,6 +281,7 @@ function dynarec.compile(chunk, hookemit)
 		--looks into the future for a jump back to here--
 		local i = at
 		while true do
+			if blockLimit and i+pc-1 >= blockLimit then break end
 			local c = code[i+pc-1]
 			if not c then break end
 			if band(c,0x3F) == JMP then
@@ -314,8 +317,11 @@ function dynarec.compile(chunk, hookemit)
 			local expdef = {}
 			expdef[#expdef+1] = "|RF"..a.."|("
 			local ret
-			if c == 2 then
-				ret = a
+			if c >= 2 then
+				ret = {}
+				for i=1, c-2 do
+					ret[i] = a+i-1
+				end
 			elseif c ~= 1 then
 				error("I DON'T HAVE MULTI RETURN SHIT YET")
 			end
@@ -324,7 +330,7 @@ function dynarec.compile(chunk, hookemit)
 				for i=a+1, a+b-1 do
 					expdef[#expdef+1] = "|R"..i.."|"
 					if i ~= a+b-1 then
-						expdef[#expdef+1] = ","
+						expdef[#expdef+1] = ", "
 					end
 				end
 			else
@@ -406,7 +412,14 @@ function dynarec.compile(chunk, hookemit)
 			else
 				ret,expdef = expdef[2],expdef[1]
 			end
-			if ret == "A" then ret = a elseif ret == "B" then ret = b elseif ret == "C" then ret = c end
+			if type(ret) == "table" then
+				for i=1, #ret do
+					local v = ret[i]
+					if v == "A" then ret[i] = a elseif v == "B" then ret[i] = b elseif v == "C" then ret[i] = c end
+				end
+			else
+				if ret == "A" then ret = a elseif ret == "B" then ret = b elseif ret == "C" then ret = c end
+			end
 			--RK: (b >= 256 and formatConstant(constants[b-256]) or use(b))
 			--R: use(b)
 			--K: formatConstant(constants[b])
@@ -432,7 +445,14 @@ function dynarec.compile(chunk, hookemit)
 					use(tonumber(usedreg))
 				end
 				if ret then
-					set(ret)
+					if type(ret) == "table" then
+						for i=1, #ret do
+							set(ret[i])
+						end
+						expPart.preventInline = true --prevent inline--
+					else
+						set(ret)
+					end
 				end
 				print(expPart.preprocessedExpdef)
 			--[[elseif o == CALL then
@@ -473,8 +493,11 @@ function dynarec.compile(chunk, hookemit)
 						print("First usage of r"..r.." before "..expPart.pc..":",fu)
 						local lu = getLastUseIn(r,fu,expPart.pc)
 						print("Last usage of r"..r.." before "..expPart.pc..":",lu)
+						if expParts[lu].preventInline then return registerPrefix.."r"..r end
 						local p = processExpPart(expParts[lu])
 						expParts[lu].inlined = true
+						toemit[expParts[lu].location] = "--REMOVED--"
+						print("INLINED "..p)
 						return p
 					else
 						return registerPrefix.."r"..r
@@ -490,6 +513,7 @@ function dynarec.compile(chunk, hookemit)
 					if expPart.ret then
 						regval[expPart.ret] = e
 						table.insert(toemit,1,registerPrefix.."r"..expPart.ret.." = "..e)
+						expPart.location = #toemit
 					else
 						table.insert(toemit,1,e)
 					end
@@ -503,8 +527,18 @@ function dynarec.compile(chunk, hookemit)
 				local e = processExpPart(expPart)
 				if e then
 					if expPart.ret then
-						regval[expPart.ret] = e
-						toemit[#toemit+1] = registerPrefix.."r"..expPart.ret.." = "..e
+						if type(expPart.ret) == "table" then
+							local n = ""
+							for i=1, #expPart.ret do
+								regval[expPart.ret[i]] = e
+								n = n..registerPrefix.."r"..expPart.ret[i]..", "
+							end
+							toemit[#toemit+1] = n:sub(1,-3).." = "..e
+						else
+							regval[expPart.ret] = e
+							toemit[#toemit+1] = registerPrefix.."r"..expPart.ret.." = "..e
+						end
+						expPart.location = #toemit
 					else
 						toemit[#toemit+1] = e
 					end
@@ -513,7 +547,13 @@ function dynarec.compile(chunk, hookemit)
 				i = i+1
 			end
 		end
-		return regval[lastreg],regval,usedAt,lastreg,i,toemit
+		local toemitnew = {}
+		for i, v in pairs(toemit) do
+			if v ~= "--REMOVED--" then
+				toemitnew[#toemitnew+1] = v
+			end
+		end
+		return regval[lastreg],regval,usedAt,lastreg,i,toemitnew,expParts
 	end
 	
 	local function generateInstruction(o,a,b,c)
@@ -636,7 +676,7 @@ function dynarec.compile(chunk, hookemit)
 			emitf("%sr%d=%sr%d",registerPrefix,a,registerPrefix,b)]]
 		elseif o == LOADNIL then
 			local i = a
-			emitf("%s=nil",string.rep(registerPrefix.."r,",a-c):sub(1,-2):gsub("r",function() i = i+1 return "r"..(i-1) end))
+			emitf("%s=nil",string.rep(registerPrefix.."r, ",a-c):sub(1,-2):gsub("r",function() i = i+1 return "r"..(i-1) end))
 		--[[elseif o == LOADK then
 			emitf("%sr%d=%s",registerPrefix,a,formatConstant(constants[b]))
 		elseif o == ins.LOADBOOL then
@@ -653,7 +693,32 @@ function dynarec.compile(chunk, hookemit)
 			if lastExpressions[a] then
 				findAndUnemit(lastExpressionEmit[a])
 			end
-		elseif o == TEST and peek(JMP) then
+		elseif o == JMP and b > 0 and nextInst(pc+b) == TFORLOOP then
+			print("GENERIC FOR FOUND!")
+			local to,ta,tb,tc = nextInst(pc+b)
+			local i = ta+3
+			emitf("for %s in %s do",string.rep(registerPrefix.."r, ",tc):sub(1,-2):gsub("r",function() i = i+1 return "r"..(i-1) end),lastExpressions[ta])
+			if lastExpressions[ta] then
+				findAndUnemit(lastExpressionEmit[ta])
+			end
+			
+			clearExpressions()
+			tabs = tabs+1
+			--emit sucess opcodes--
+			local to = pc+b
+			print("wat",to)
+			pushBlockLimit(to)
+			while pc < to do
+				print("pc",pc)
+				generateInstruction(nextInst())
+			end
+			popBlockLimit()
+			tabs = tabs-1
+			clearExpressions()
+			emit("end")
+		elseif o == TFORLOOP then
+			nextInst()
+		elseif (o == TEST or o == EQ or o == LT or o == LE) and peek(JMP) then
 			--either an if-elseif-else statement or an and-or chain
 			--either one can go fuck themselves
 			--TODO: generateExpression
@@ -687,7 +752,11 @@ function dynarec.compile(chunk, hookemit)
 			else
 				debug("if statement")
 				--unemitRange(lastExpressionRange[1],lastExpressionRange[2])
-				emitf("if%s %s then",c == 1 and " not" or "",lastExpressions[a] or registerPrefix.."r"..a)
+				if o == TEST then
+					emitf("if%s %s then",c == 1 and " not" or "",lastExpressions[a] or registerPrefix.."r"..a)
+				else
+					emitf("if%s %s %s %s then",a == 1 and " not" or "",lastExpressions[b] or registerPrefix.."r"..b,operatorExpression[o],c > 255 and formatConstant(constants[c-256]) or (lastExpressions[c] or registerPrefix.."r"..c))
+				end
 				if lastExpressions[a] then
 					findAndUnemit(lastExpressionEmit[a])
 				end
@@ -727,10 +796,35 @@ function dynarec.compile(chunk, hookemit)
 			if lastExpressions[a] then
 				findAndUnemit(lastExpressionEmit[a])
 			end
-		elseif o == GETTABLE then
-			R[a] = R[b][RK(c)]
-		elseif o == SETTABLE then
-			R[a][RK(b)] = RK(c)
+		elseif o == FORPREP then
+			local start = lastExpressions[a] or registerPrefix.."r"..a
+			local limit = lastExpressions[a+1] or registerPrefix.."r"..a+1
+			local step = lastExpressions[a+2] or registerPrefix.."r"..a+2
+			emitf("for "..registerPrefix.."r"..(a+3).." = "..start..", "..limit..", "..step.." do")
+			if lastExpressions[a] then
+				findAndUnemit(lastExpressionEmit[a])
+			end
+			if lastExpressions[a+1] then
+				findAndUnemit(lastExpressionEmit[a+1])
+			end
+			if lastExpressions[a+2] then
+				findAndUnemit(lastExpressionEmit[a+2])
+			end
+			
+			clearExpressions()
+			tabs = tabs+1
+			--emit sucess opcodes--
+			local to = pc+b
+			pushBlockLimit(to)
+			while pc < to do
+				generateInstruction(nextInst())
+			end
+			popBlockLimit()
+			local jo,ja,jb,jc = nextInst()
+			assert(jo == FORLOOP)
+			tabs = tabs-1
+			clearExpressions()
+			emit("end")
 		elseif o == MOVE or o == ADD or o == SUB or o == MUL or o == DIV or o == MOD or o == POW or o == GETGLOBAL or o == LEN or o == LOADK or o == NOT or o == UNM or o == CALL then
 			--R[a] = RK(b)+RK(c)
 			--start set routine--
@@ -746,11 +840,12 @@ function dynarec.compile(chunk, hookemit)
 					break
 				end
 			end
-			local last,rv,use,lastreg,lastpc,toemit = generateExpression(pc-1,cpc-1)
+			local last,rv,use,lastreg,lastpc,toemit,expParts = generateExpression(pc-1,cpc-1)
 			for i, v in pairs(toemit) do
 				lastExpressions[i] = rv[i]
 				emit(v)
 				lastExpressionEmit[i] = output[#output]
+				lastExpressionMetadata[i] = expParts[i]
 			end
 			--emitf("%sr%d=%s",registerPrefix,a,lastExpression)
 			--lastExpressionRange[1] = pc-1
