@@ -45,15 +45,25 @@ local sbc = string.dump(function(...)
 		i = i+1
 	end]]
 	--print("hai")
-	while ret_true() do
+	--[[while ret_true() do
 		--print("RET TRUE!")
 		while true do
 			local i = 1
 			while i < 8 do
-				print(i)
+				if i%2 == 0 then
+					print(i, "is even")
+				else
+					print(i, "is odd")
+				end
 				i = i+1
 			end
 		end
+	end]]
+	--[[for i=1, 10 do
+		print(i)
+	end]]
+	for i, v in pairs(table) do
+		print(i,v)
 	end
 end)
 local bc = bytecode.load(sbc)
