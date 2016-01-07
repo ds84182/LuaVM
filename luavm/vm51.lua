@@ -342,7 +342,7 @@ do
 				elseif o == TFORLOOP then
 					local ret = {R[a](R[a+1],R[a+2])}
 					local i = 1
-					for n=a+3, a+3+b do R[n] = ret[i] i=i+1 end
+					for n=a+3, a+3+c do R[n] = ret[i] i=i+1 end
 					if R[a+3] ~= nil then
 						R[a+2] = R[a+3]
 					else
