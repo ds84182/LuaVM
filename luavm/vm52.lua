@@ -116,7 +116,11 @@ do
 		end
 	
 		local function RK(n)
-			return n >= 256 and constants[n-256] or R[n]
+			if n >= 256 then
+				return constants[n-256]
+			else
+				return R[n]
+			end
 		end
 	
 		--instruction constants--
@@ -423,7 +427,6 @@ do
 						debug("UPVALUE",proto.upvaluesDebug[i],i,uv.idx,uv.instack)
 						if uv.instack > 0 then
 							upvaldef[i] = {type=0,reg=uv.idx}
-							openUpvalues[uv.idx] = upvaldef[i]
 						else
 							upvaldef[i] = {type=1,reg=uv.idx}
 						end
