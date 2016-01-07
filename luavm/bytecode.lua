@@ -199,10 +199,112 @@ do
 	end
 end
 
+do
+	local instructionNames = {
+		[0]="MOVE","LOADK","LOADKX","LOADBOOL","LOADNIL",
+		"GETUPVAL","GETTABUP","GETTABLE",
+		"SETTABUP","SETUPVAL","SETTABLE","NEWTABLE",
+		"SELF","ADD","SUB","MUL","DIV","MOD","POW","UNM","NOT","LEN","CONCAT",
+		"JMP","EQ","LT","LE","TEST","TESTSET","CALL","TAILCALL","RETURN",
+		"FORLOOP","FORPREP","TFORCALL","TFORLOOP","SETLIST","CLOSURE","VARARG","EXTRAARG"
+	}
+
+	local iABC = 0
+	local iABx = 1
+	local iAsBx = 2
+	local iA = 3
+	local iAx = 4
+
+	local instructionFormats = {
+		[0]=iABC,iABx,iA,iABC,iABC,
+		iABC,iABC,iABC,
+		iABC,iABC,iABC,iABC,
+		iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,
+		iAsBx,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,
+		iAsBx,iAsBx,iABC,iAsBx,iABC,iABx,iABC,iAx
+	}
+	
+	local ins = {}
+	for i, v in pairs(instructionNames) do ins[v] = i end
+	
+	bytecode.lua52.instructionNames = instructionNames
+	bytecode.lua52.instructions = ins
+	bytecode.lua52.defaultReturn = 8388638
+
+	--instruction constants--
+	local MOVE = 0
+	local LOADK = 1
+	local LOADKX = 2
+	local LOADBOOL = 3
+	local LOADNIL = 4
+	local GETUPVAL = 5
+	local GETTABUP = 6
+	local GETTABLE = 7
+	local SETTABUP = 8
+	local SETUPVAL = 9
+	local SETTABLE = 10
+	local NEWTABLE = 11
+	local SELF = 12
+	local ADD = 13
+	local SUB = 14
+	local MUL = 15
+	local DIV = 16
+	local MOD = 17
+	local POW = 18
+	local UNM = 19
+	local NOT = 20
+	local LEN = 21
+	local CONCAT = 22
+	local JMP = 23
+	local EQ = 24
+	local LT = 25
+	local LE = 26
+	local TEST = 27
+	local TESTSET = 28
+	local CALL = 29
+	local TAILCALL = 30
+	local RETURN = 31
+	local FORLOOP = 32
+	local FORPREP = 33
+	local TFORCALL = 34
+	local TFORLOOP = 35
+	local SETLIST = 36
+	local CLOSURE = 37
+	local VARARG = 38
+	local EXTRAARG = 39
+
+	function bytecode.lua52.encode(inst,a,b,c)
+		inst = type(inst) == "string" and ins[inst] or inst
+		local format = instructionFormats[inst]
+		return
+			format == iABC and
+			bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b,0x1FF),23), bit.blshift(bit.band(c,0x1FF),14)) or
+			format == iABx and
+			bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b,0x3FFFF),14)) or
+			bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b+131071,0x3FFFF),14))
+	end
+
+	function bytecode.lua52.decode(inst)
+		local opcode = bit.band(inst,0x3F)
+		local format = instructionFormats[opcode]
+		if format == iABC then
+			return opcode, bit.band(bit.brshift(inst,6),0xFF), bit.band(bit.brshift(inst,23),0x1FF), bit.band(bit.brshift(inst,14),0x1FF)
+		elseif format == iABx then
+			return opcode, bit.band(bit.brshift(inst,6),0xFF), bit.band(bit.brshift(inst,14),0x3FFFF)
+		elseif format == iAsBx then
+			local sBx = bit.band(bit.brshift(inst,14),0x3FFFF)-131071
+			return opcode, bit.band(bit.brshift(inst,6),0xFF), sBx
+		else
+			error(opcode.." "..format)
+		end
+	end
+end
+
 function bytecode.load(bc)
 	debug("Loading binary chunk with size "..#bc.."b")
 	local idx = 1
-	local integer, size_t
+	local integer, size_t, number
+	local bigEndian = false
 	local function u1()
 		idx = idx+1
 		return bc:byte(idx-1)
@@ -210,20 +312,40 @@ function bytecode.load(bc)
 	local function u2()
 		local a,b = bc:byte(idx,idx+1)
 		idx = idx+2
-		return bit.blshift(b,8)+a
+		return bigEndian and bit.blshift(a,8)+b or bit.blshift(b,8)+a
 	end
 	local function u4()
 		local a,b,c,d = bc:byte(idx,idx+3)
 		idx = idx+4
-		return bit.blshift(d,24)+bit.blshift(c,16)+bit.blshift(b,8)+a
+		return bigEndian and
+			bit.blshift(a,24)+bit.blshift(b,16)+bit.blshift(c,8)+d or
+			bit.blshift(d,24)+bit.blshift(c,16)+bit.blshift(b,8)+a
 	end
 	local function u8()
 		local a,b,c,d,e,f,g,h = bc:byte(idx,idx+7)
 		idx = idx+8
-		return bit.blshift(d,24)+bit.blshift(c,16)+bit.blshift(b,8)+a
+		return bigEndian and
+			bit.blshift(a,24)+bit.blshift(b,16)+bit.blshift(c,8)+d or
+			bit.blshift(d,24)+bit.blshift(c,16)+bit.blshift(b,8)+a
+	end
+	local function float()
+		local x = bc:sub(idx,idx+3)
+		if bigEndian then x = x:reverse() end
+		idx = idx+4
+		
+		local sign = 1
+		local mantissa = string.byte(x, 3) % 128
+		for i = 2, 1, -1 do mantissa = mantissa * 256 + string.byte(x, i) end
+		if string.byte(x, 4) > 127 then sign = -1 end
+		local exponent = (string.byte(x, 4) % 128) * 2 +
+					   math.floor(string.byte(x, 3) / 128)
+		if exponent == 0 then return 0 end
+		mantissa = (math.ldexp(mantissa, -23) + 1) * sign
+		return math.ldexp(mantissa, exponent - 127)
 	end
 	local function double(f)
 		local x = bc:sub(idx,idx+7)
+		if bigEndian then x = x:reverse() end
 		idx = idx+8
 		
 		local sign = 1
@@ -257,10 +379,12 @@ function bytecode.load(bc)
 	if types ~= supportedTypes then
 		print("Warning: types do not match the currently running lua binary")
 	end
+	bigEndian = types:byte(1) ~= 1
 	integer = types:byte(2) == 8 and u8 or u4
 	if integer == u8 then print("Caution: Because you are on a 128bit(!?) platform, LuaVM2 will chop off the upper 4 bytes from integer!") end
 	size_t = types:byte(3) == 8 and u8 or u4
 	--if size_t == u8 then print("Caution: Because you are on a 64bit platform, LuaVM2 will chop off the upper 4 bytes from size_t!") end
+	number = types:byte(5) == 8 and double or float
 	if version == 0x52 then
 		ub(6)
 	end
@@ -278,20 +402,22 @@ function bytecode.load(bc)
 		
 		local function constantList()
 			local constants = {}
-			for i=1, integer() do
+			local c = integer()
+			print(c)
+			for i=1, c do
 				local type = u1()
 				if type == 0 then
 					constants[i-1] = nil
 				elseif type == 1 then
 					constants[i-1] = u1() > 0
 				elseif type == 3 then
-					constants[i-1] = double(true)
+					constants[i-1] = number(true)
 				elseif type == 4 then
 					constants[i-1] = us()
 				else
 					error("Type: "..type)
 				end
-				debug("Constant "..(i-1)..": "..tostring(constants[i-1]))
+				debug("Constant "..(i-1)..": "..tostring(constants[i-1]).." "..type)
 			end
 			return constants
 		end
@@ -534,4 +660,8 @@ function bytecode.dump(bc)
 		local o,a,b,c = ver.decode(bc.instructions[i])
 		print(i, ver.instructionNames[o], a, b, c)
 	end
+end
+
+if _VERSION == "Lua 5.3" then
+	require "luavm.bytecode_53"
 end
