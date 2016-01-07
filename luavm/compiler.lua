@@ -111,7 +111,7 @@ function compiler.compile(bcasm)
 	end
 	
 	local function matchNumber()
-		local s, e = bcasm:find("^%d+",idx)
+		local s, e = bcasm:find("^[-+]?%d+",idx)
 		idx = e and e+1 or idx
 		return s and tonumber(bcasm:sub(s,e)) or nil
 	end
