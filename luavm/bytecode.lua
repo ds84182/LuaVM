@@ -5,300 +5,190 @@ if not bit.blshift then
 	bit.brshift = bit.rshift
 end
 
+local modulename = ...
+modulename = modulename:match("^(.+)%..-$") or modulename
+
+local function subrequire(sub, ...)
+	local mod = require(modulename.."."..sub)
+	if select('#', ...) > 0 then
+		mod = mod(...)
+	end
+	return unpack(mod)
+end
+
 local supportedTypes = string.dump(function() end):sub(7,12)
 
 bytecode = {}
 bytecode.debug = false
-bytecode.lua51 = {}
-bytecode[0x51] = bytecode.lua51
-bytecode.lua52 = {}
-bytecode[0x52] = bytecode.lua52
-
-local function debug(...)
+bytecode.printDebug = function(...)
 	if bytecode.debug then
 		print(...)
 	end
 end
+bytecode.version = {}
 
-do
-	local instructionNames = {
-		[0]="MOVE","LOADK","LOADBOOL","LOADNIL",
-		"GETUPVAL","GETGLOBAL","GETTABLE",
-		"SETGLOBAL","SETUPVAL","SETTABLE","NEWTABLE",
-		"SELF","ADD","SUB","MUL","DIV","MOD","POW","UNM","NOT","LEN","CONCAT",
-		"JMP","EQ","LT","LE","TEST","TESTSET","CALL","TAILCALL","RETURN",
-		"FORLOOP","FORPREP","TFORLOOP","SETLIST","CLOSE","CLOSURE","VARARG"
-	}
-
-	local ins = {}
-	for i, v in pairs(instructionNames) do ins[v] = i end
-
-	bytecode.lua51.instructionNames = instructionNames
-	bytecode.lua51.instructions = ins
-	bytecode.lua51.defaultReturn = 8388638
-
-	local iABC = 0
-	local iABx = 1
-	local iAsBx = 2
-
-	local instructionFormats = {
-		[0]=iABC,iABx,iABC,iABC,
-		iABC,iABx,iABC,
-		iABx,iABC,iABC,iABC,
-		iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,
-		iAsBx,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,
-		iAsBx,iAsBx,iABC,iABC,iABC,iABx,iABC
-	}
-
-	--instruction constants--
-	local MOVE = 0
-	local LOADK = 1
-	local LOADBOOL = 2
-	local LOADNIL = 3
-	local GETUPVAL = 4
-	local GETGLOBAL = 5
-	local GETTABLE = 6
-	local SETGLOBAL = 7
-	local SETUPVAL = 8
-	local SETTABLE = 9
-	local NEWTABLE = 10
-	local SELF = 11
-	local ADD = 12
-	local SUB = 13
-	local MUL = 14
-	local DIV = 15
-	local MOD = 16
-	local POW = 17
-	local UNM = 18
-	local NOT = 19
-	local LEN = 20
-	local CONCAT = 21
-	local JMP = 22
-	local EQ = 23
-	local LT = 24
-	local LE = 25
-	local TEST = 26
-	local TESTSET = 27
-	local CALL = 28
-	local TAILCALL = 29
-	local RETURN = 30
-	local FORLOOP = 31
-	local FORPREP = 32
-	local TFORLOOP = 33
-	local SETLIST = 34
-	local CLOSE = 35
-	local CLOSURE = 36
-	local VARARG = 37
-
-	function bytecode.lua51.encode(inst,a,b,c)
-		inst = type(inst) == "string" and ins[inst] or inst
-		local format = instructionFormats[inst]
-		return
-			format == iABC and
-			bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b,0x1FF),23), bit.blshift(bit.band(c,0x1FF),14)) or
-			format == iABx and
-			bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b,0x3FFFF),14)) or
-			bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b+131071,0x3FFFF),14))
-	end
-
-	function bytecode.lua51.decode(inst)
-		local opcode = bit.band(inst,0x3F)
-		local format = instructionFormats[opcode]
-		if format == iABC then
-			return opcode, bit.band(bit.brshift(inst,6),0xFF), bit.band(bit.brshift(inst,23),0x1FF), bit.band(bit.brshift(inst,14),0x1FF)
-		elseif format == iABx then
-			return opcode, bit.band(bit.brshift(inst,6),0xFF), bit.band(bit.brshift(inst,14),0x3FFFF)
-		elseif format == iAsBx then
-			local sBx = bit.band(bit.brshift(inst,14),0x3FFFF)-131071
-			return opcode, bit.band(bit.brshift(inst,6),0xFF), sBx
-		else
-			error(opcode.." "..format)
-		end
-	end
+if _VERSION >= "Lua 5.3" then
+	bytecode.version.lua53 = subrequire("lua53", bytecode)
+	bytecode.version[0x53] = bytecode.version.lua53
+	bytecode.version.S = bytecode.version.lua51
+else
+	--If not 5.3 or above, create bytecode.bit and bytecode.binarytypes
 	
-	bytecode.lua51.patcher = {}
-
-	local function patchJumpsAndAdd(bc, pc, op)
-		for i=0, #bc.instructions do
-			local o,a,b,c = bytecode.lua51.decode(bc.instructions[i])
-			if o == LOADBOOL then
-				if c ~= 0 then
-					if i+1 == pc then
-						error("TODO: Patch LOADBOOL")
-					end
-				end
-			elseif o == JMP then
-				if (i < pc and i+b+1 > pc) then
-					b = b+1 --since this gets shifted forward...
-				elseif (i > pc and i+b+1 <= pc) then
-					b = b-1 --since this gets shifted backward...
-				end
-			elseif o == TEST then
-				if i+1 == pc then
-					error("TODO: Patch TEST")
-				end
-			elseif o == TESTSET then
-				if i+1 == pc then
-					error("TODO: Patch TESTSET")
-				end
-			elseif o == FORLOOP then
-				if (i < pc and i+b+1 > pc) then
-					b = b+1 --since this gets shifted forward...
-				elseif (i > pc and i+b+1 <= pc) then
-					b = b-1 --since this gets shifted backward...
-				end
-			elseif o == FORPREP then
-				if (i < pc and i+b+1 > pc) then
-					b = b+1 --since this gets shifted forward...
-				elseif (i > pc and i+b+1 <= pc) then
-					b = b-1 --since this gets shifted backward...
-				end
-			elseif o == TFORPREP then
-				if i+1 == pc then
-					error("TODO: Patch TFORPREP")
-				end
-			end
-			bc.instructions[i] = bytecode.lua51.encode(o,a,b,c)
-			print(i,bc.instructions[i])
-		end
-	
-		for i=#bc.instructions, pc, -1 do
-			bc.instructions[i+1] = bc.instructions[i]
-			bc.sourceLines[i+1] = bc.sourceLines[i]
-		end
-		bc.instructions[pc] = op
-	end
-
-	function bytecode.lua51.patcher.insert(bc, pc, inst)
-		--insert commands, fix jump targets--
-		patchJumpsAndAdd(bc, pc, inst)
-	end
-
-	function bytecode.lua51.patcher.replace(bc, pc, inst)
-		bc.instructions[pc] = inst
-	end
-
-	function bytecode.lua51.patcher.find(bc, pc, o)
-		if type(o) == "string" then
-			o = ins[o]
-		end
+	--use bit32 if available, else use require "bit"
+	if bit32 then
+		bytecode.bit = {
+			bor = bit32.bor,
+			band = bit32.band,
+			bnot = bit32.bnot,
+			blshift = bit32.lshift,
+			brshift = bit32.rshift
+		}
+	else
+		local bitAvailable, bit = pcall(require, "bit")
 		
-		for i=pc+1, #bc.instructions do
-			local no = bytecode.lua51.decode(bc.instructions[i])
-			if no == o then
-				return i
-			end
-		end
-	end
-
-	function bytecode.lua51.patcher.addConstant(bc, const)
-		--try find constant...---
-		for i, v in pairs(bc.constants) do if v == const then return i end end
-		bc.constants[#bc.constants+1] = const
-		return #bc.constants
-	end
-end
-
-do
-	local instructionNames = {
-		[0]="MOVE","LOADK","LOADKX","LOADBOOL","LOADNIL",
-		"GETUPVAL","GETTABUP","GETTABLE",
-		"SETTABUP","SETUPVAL","SETTABLE","NEWTABLE",
-		"SELF","ADD","SUB","MUL","DIV","MOD","POW","UNM","NOT","LEN","CONCAT",
-		"JMP","EQ","LT","LE","TEST","TESTSET","CALL","TAILCALL","RETURN",
-		"FORLOOP","FORPREP","TFORCALL","TFORLOOP","SETLIST","CLOSURE","VARARG","EXTRAARG"
-	}
-
-	local iABC = 0
-	local iABx = 1
-	local iAsBx = 2
-	local iA = 3
-	local iAx = 4
-
-	local instructionFormats = {
-		[0]=iABC,iABx,iA,iABC,iABC,
-		iABC,iABC,iABC,
-		iABC,iABC,iABC,iABC,
-		iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,
-		iAsBx,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,
-		iAsBx,iAsBx,iABC,iAsBx,iABC,iABx,iABC,iAx
-	}
-	
-	local ins = {}
-	for i, v in pairs(instructionNames) do ins[v] = i end
-	
-	bytecode.lua52.instructionNames = instructionNames
-	bytecode.lua52.instructions = ins
-	bytecode.lua52.defaultReturn = 8388638
-
-	--instruction constants--
-	local MOVE = 0
-	local LOADK = 1
-	local LOADKX = 2
-	local LOADBOOL = 3
-	local LOADNIL = 4
-	local GETUPVAL = 5
-	local GETTABUP = 6
-	local GETTABLE = 7
-	local SETTABUP = 8
-	local SETUPVAL = 9
-	local SETTABLE = 10
-	local NEWTABLE = 11
-	local SELF = 12
-	local ADD = 13
-	local SUB = 14
-	local MUL = 15
-	local DIV = 16
-	local MOD = 17
-	local POW = 18
-	local UNM = 19
-	local NOT = 20
-	local LEN = 21
-	local CONCAT = 22
-	local JMP = 23
-	local EQ = 24
-	local LT = 25
-	local LE = 26
-	local TEST = 27
-	local TESTSET = 28
-	local CALL = 29
-	local TAILCALL = 30
-	local RETURN = 31
-	local FORLOOP = 32
-	local FORPREP = 33
-	local TFORCALL = 34
-	local TFORLOOP = 35
-	local SETLIST = 36
-	local CLOSURE = 37
-	local VARARG = 38
-	local EXTRAARG = 39
-
-	function bytecode.lua52.encode(inst,a,b,c)
-		inst = type(inst) == "string" and ins[inst] or inst
-		local format = instructionFormats[inst]
-		return
-			format == iABC and
-			bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b,0x1FF),23), bit.blshift(bit.band(c,0x1FF),14)) or
-			format == iABx and
-			bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b,0x3FFFF),14)) or
-			bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b+131071,0x3FFFF),14))
-	end
-
-	function bytecode.lua52.decode(inst)
-		local opcode = bit.band(inst,0x3F)
-		local format = instructionFormats[opcode]
-		if format == iABC then
-			return opcode, bit.band(bit.brshift(inst,6),0xFF), bit.band(bit.brshift(inst,23),0x1FF), bit.band(bit.brshift(inst,14),0x1FF)
-		elseif format == iABx then
-			return opcode, bit.band(bit.brshift(inst,6),0xFF), bit.band(bit.brshift(inst,14),0x3FFFF)
-		elseif format == iAsBx then
-			local sBx = bit.band(bit.brshift(inst,14),0x3FFFF)-131071
-			return opcode, bit.band(bit.brshift(inst,6),0xFF), sBx
+		if bitAvailable then
+			bytecode.bit = bit
 		else
-			error(opcode.." "..format)
+			error("TODO: Custom bitwise implementation here!")
 		end
 	end
+	
+	local bit = bytecode.bit
+	
+	local function grab_byte(v)
+		return math.floor(v / 256), string.char(math.floor(v) % 256)
+	end
+	
+	bytecode.binarytypes = {
+		encode = {
+			u1 = function(value, bigEndian)
+				return string.char(value)
+			end,
+			u2 = function(value, bigEndian)
+				local out = string.char(
+					bit.band(value,0xFF),
+					bit.brshift(bit.band(value,0xFF00),8)
+				)
+				
+				if bigEndian then out = out:reverse() end
+				return out
+			end,
+			u4 = function(value, bigEndian)
+				local out = string.char(
+					bit.band(value, 0xFF),
+					bit.brshift(bit.band(value, 0xFF00), 8),
+					bit.brshift(bit.band(value, 0xFF0000), 16),
+					bit.brshift(bit.band(value, 0xFF000000), 24)
+				)
+				
+				if bigEndian then out = out:reverse() end
+				return out
+			end,
+			u8 = function(value, bigEndian) --CAUTION: This may not output correctly!
+				local out = string.char(
+					bit.band(value, 0xFF),
+					bit.brshift(bit.band(value, 0xFF00), 8),
+					bit.brshift(bit.band(value, 0xFF0000), 16),
+					bit.brshift(bit.band(value, 0xFF000000), 24),
+					bit.brshift(bit.band(value, 0xFF00000000), 32),
+					bit.brshift(bit.band(value, 0xFF0000000000), 40),
+					bit.brshift(bit.band(value, 0xFF000000000000), 48),
+					bit.brshift(bit.band(value, 0xFF00000000000000), 56)
+				)
+				
+				if bigEndian then out = out:reverse() end
+				return out
+			end,
+			float = function(value, bigEndian)
+				error("NYI")
+			end,
+			double = function(value, bigEndian)
+				local sign = 0
+				if x < 0 then sign = 1; x = -x end
+				local mantissa, exponent = math.frexp(x)
+				if x == 0 then -- zero
+				mantissa, exponent = 0, 0
+				else
+				mantissa = (mantissa * 2 - 1) * math.ldexp(0.5, 53)
+				exponent = exponent + 1022
+				end
+				local v, byte = "" -- convert to bytes
+				x = mantissa
+				for i = 1,6 do
+					x, byte = grab_byte(x); v = v..byte -- 47:0
+				end
+				x, byte = grab_byte(exponent * 16 + x); v = v..byte -- 55:48
+				x, byte = grab_byte(sign * 128 + x); v = v..byte -- 63:56
+				
+				if bigEndian then v = v:reverse() end
+				return v
+			end,
+		},
+		decode = {
+			u1 = function(bin, index, bigEndian)
+				return bin:byte(index)
+			end,
+			u2 = function(bin, index, bigEndian)
+				local a, b = bin:byte(index, index+1)
+				return bigEndian and bit.blshift(a, 8)+b or bit.blshift(b, 8)+a
+			end,
+			u4 = function(bin, index, bigEndian)
+				local a, b, c, d = bin:byte(idx, idx+3)
+				return bigEndian and
+					bit.blshift(a, 24)+bit.blshift(b, 16)+bit.blshift(c, 8)+d or
+					bit.blshift(d, 24)+bit.blshift(c, 16)+bit.blshift(b, 8)+a
+			end,
+			u8 = function(bin, index, bigEndian) --CAUTION: This may output math.huge for large 64bit numbers!
+				local a, b, c, d, e, f, g, h = bin:byte(idx, idx+7)
+				return bigEndian and
+					bit.blshift(a, 24)+bit.blshift(b, 16)+bit.blshift(c, 8)+d or
+					bit.blshift(d, 24)+bit.blshift(c, 16)+bit.blshift(b, 8)+a
+			end,
+			float = function(bin, index, bigEndian)
+				local x = bin:sub(index, index+3)
+				if bigEndian then x = x:reverse() end
+				
+				local sign = 1
+				local mantissa = string.byte(x, 3) % 128
+				for i = 2, 1, -1 do mantissa = mantissa * 256 + string.byte(x, i) end
+				if string.byte(x, 4) > 127 then sign = -1 end
+				local exponent = (string.byte(x, 4) % 128) * 2 +
+							   math.floor(string.byte(x, 3) / 128)
+				if exponent == 0 then return 0 end
+				mantissa = (math.ldexp(mantissa, -23) + 1) * sign
+				return math.ldexp(mantissa, exponent - 127)
+			end,
+			double = function(bin, index, bigEndian)
+				local x = bin:sub(index, index+7)
+				if bigEndian then x = x:reverse() end
+				
+				local sign = 1
+				local mantissa = string.byte(x, 7) % 16
+				for i = 6, 1, -1 do mantissa = mantissa * 256 + string.byte(x, i) end
+				if string.byte(x, 8) > 127 then sign = -1 end
+				local exponent = (string.byte(x, 8) % 128) * 16 +math.floor(string.byte(x, 7) / 16)
+				if exponent == 0 then return 0 end
+				mantissa = (math.ldexp(mantissa, -52) + 1) * sign
+				return math.ldexp(mantissa, exponent - 1023)
+			end
+		}
+	}
 end
+
+if _VERSION >= "Lua 5.2" then
+	bytecode.version.lua52 = subrequire("lua52", bytecode)
+	bytecode.version[0x52] = bytecode.version.lua52
+	bytecode.version.R = bytecode.version.lua51
+end
+
+if _VERSION >= "Lua 5.1" then
+	bytecode.version.lua51 = subrequire("lua51", bytecode)
+	bytecode.version[0x51] = bytecode.version.lua51
+	bytecode.version.Q = bytecode.version.lua51
+end
+
+local debug = bytecode.printDebug
+local bit = bytecode.bit
 
 function bytecode.load(bc)
 	debug("Loading binary chunk with size "..#bc.."b")
