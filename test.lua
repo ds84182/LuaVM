@@ -5,7 +5,7 @@ function pass(...)
 	return ...
 end
 
-print(vm.lua51.run(bytecode.load(string.dump(function(...)
+local dump = string.dump(function(...)
 	print(...)
 	local r,e = 4,4
 	local a, b, c = pass(1,2,3)
@@ -27,7 +27,9 @@ print(vm.lua51.run(bytecode.load(string.dump(function(...)
 		i = i+1
 	end
 	return false and 1 or 0
-end)),{"h","i",3,4,5}))
+end)
+
+print(vm.lua51.run(bytecode.load(dump),{"h","i",3,4,5}))
 
 local testbc = string.dump(function() return "Hello" end)
 local testbcl = bytecode.load(testbc)
