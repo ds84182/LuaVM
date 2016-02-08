@@ -378,9 +378,15 @@ function bytecode.load(bc)
 	return chunk()]]
 end
 
-local header = "\27Lua"..string.char(0x51)..string.char(0)..supportedTypes
+--local header = "\27Lua"..string.char(0x51)..string.char(0)..supportedTypes
 function bytecode.save(chunk)
-	assert(chunk.version == 0x51, "Cannot save Lua versions greater than 5.1! Sorry!")
+	local versionCode = chunk.header.version
+	local version = bytecode.version[versionCode]
+	assert(version and version.save, ("version not supported: Lua %X.%X"):format(math.floor(versionCode/16), versionCode%16))
+	
+	return version.save(chunk)
+	
+	--[[assert(chunk.version == 0x51, "Cannot save Lua versions greater than 5.1! Sorry!")
 	local bc = {header}
 	
 	local function w1(b)
@@ -497,7 +503,7 @@ function bytecode.save(chunk)
 	end
 	
 	writeChunk(chunk)
-	return table.concat(bc)
+	return table.concat(bc)]]
 end
 
 function bytecode.new(version)
