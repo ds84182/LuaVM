@@ -196,5 +196,211 @@ return function(bytecode)
 		return #bc.constants
 	end
 	
+	-- bytecode loading
+	
+	function impl.loadHeader(bc)
+		local header = {version = 0x51}
+		
+		local fmtver = bc:byte(6)
+		header.fmtver = fmtver
+		debug("Format Version: %02X", fmtver)
+		
+		local types = bc:sub(7, 13)
+		debug("Types: "..types:gsub(".", function(c) return string.format("%02X ", c:byte()) end))
+		
+		local bigEndian = types:byte(1) ~= 1
+		header.bigEndian = bigEndian
+		debug("Big Endian: %s", tostring(bigEndian))
+		
+		local integer = types:byte(2)
+		header.integer = integer
+		debug("Integer Size: %d bytes", integer)
+		
+		local size_t = types:byte(3)
+		header.size_t = size_t
+		debug("Size_T Size: %d bytes", size_t)
+		
+		local instruction = types:byte(4)
+		header.instruction = instruction
+		debug("Instruction Size: %d bytes", instruction)
+		
+		--integral or numerical number stuff
+		do
+			local integralNumbers = types:byte(6) ~= 0
+			local size = types:byte(5)
+			header.number_integral = integralNumbers
+			header.number = size
+			debug("Numerical Format: %d bytes <%s>", size, integralNumbers and "integral" or "floating")
+		end
+		
+		return header
+	end
+	
+	function impl.load(bc)
+		debug("Lua 5.1 Bytecode Loader")
+		
+		local idx = 13
+		local integer, size_t, number
+		local bigEndian = false
+		local binarytypes = bytecode.binarytypes
+		
+		local function u1()
+			idx = idx+1
+			return binarytypes.decode.u1(bc, idx-1, bigEndian)
+		end
+		
+		local function u2()
+			idx = idx+2
+			return binarytypes.decode.u2(bc, idx-2, bigEndian)
+		end
+		
+		local function u4()
+			idx = idx+4
+			return binarytypes.decode.u4(bc, idx-4, bigEndian)
+		end
+		
+		local function u8()
+			idx = idx+8
+			return binarytypes.decode.u8(bc, idx-8, bigEndian)
+		end
+		
+		local function float()
+			idx = idx+4
+			return binarytypes.decode.float(bc, idx-4, bigEndian)
+		end
+		
+		local function double(f)
+			idx = idx+8
+			return binarytypes.decode.float(bc, idx-8, bigEndian)
+		end
+		
+		local function ub(n)
+			idx = idx+n
+			return bc:sub(idx-n,idx-1)
+		end
+		
+		local function us()
+			local size = size_t()
+			--print(size)
+			return ub(size):sub(1,-2)
+		end
+		
+		local integralSizes = {
+			[1] = u1,
+			[2] = u2,
+			[4] = u4,
+			[8] = u8
+		}
+		
+		local numericSizes = {
+			[4] = float,
+			[8] = double
+		}
+		
+		local header = impl.loadHeader(bc)
+		
+		assert(header.fmtver == 0 or header.fmtver == 255, "unknown format version: "..header.fmtver)
+		
+		bigEndian = header.bigEndian
+		integer = assert(integralSizes[header.integer], "unsupported integer size: "..header.integer)
+		size_t = assert(integralSizes[header.size_t], "unsupported size_t size: "..header.size_t)
+		assert(header.instruction == 4, "unsupported instruction size: "..header.instruction)
+		
+		--integral or numerical number stuff
+		do
+			local integralNumbers = header.number_integral
+			local size = header.number
+			number = assert(integralNumbers and integralSizes[size] or numericSizes[size], "unsupported number size: "..(integralNumbers and "integral" or "floating").." "..size)
+		end
+		
+		local function chunk()
+			local function instructionList()
+				local instructions = {}
+				local count = integer()
+				for i=1, count do
+					instructions[i-1] = u4()
+				end
+				return instructions
+			end
+			
+			local function constantList()
+				local constants = {}
+				local c = integer()
+				print(c)
+				for i=1, c do
+					local type = u1()
+					if type == 0 then
+						constants[i-1] = nil
+					elseif type == 1 then
+						constants[i-1] = u1() > 0
+					elseif type == 3 then
+						constants[i-1] = number(true)
+					elseif type == 4 then
+						constants[i-1] = us()
+					else
+						error("Type: "..type)
+					end
+					debug("Constant "..(i-1)..": "..tostring(constants[i-1]).." "..type)
+				end
+				return constants
+			end
+			
+			local function functionPrototypeList()
+				local functionPrototypes = {}
+				for i=1, integer() do
+					functionPrototypes[i-1] = chunk()
+				end
+				return functionPrototypes
+			end
+			
+			local function sourceLineList()
+				local sourceLines = {}
+				for i=1, integer() do
+					sourceLines[i-1] = integer()
+				end
+				return sourceLines
+			end
+			
+			local function localList()
+				local locals = {}
+				for i=1, integer() do
+					locals[i-1] = {
+						name = us(),
+						startpc = integer(),
+						endpc = integer()
+					}
+				end
+				return locals
+			end
+			
+			local function upvalueList()
+				local upvalues = {}
+				for i=1, integer() do
+					upvalues[i-1] = us()
+				end
+				return upvalues
+			end
+			
+			--extract an lua chunk into a table--
+			local c = {header = header}
+			c.name = us()
+			c.lineDefined = integer()
+			c.lastLineDefined = integer()
+			c.nupval = u1()
+			c.nparam = u1()
+			c.isvararg = u1()
+			c.maxStack = u1()
+			c.instructions = instructionList()
+			c.constants = constantList()
+			c.functionPrototypes = functionPrototypeList()
+			c.sourceLines = sourceLineList()
+			c.locals = localList()
+			c.upvalues = upvalueList()
+			return c
+		end
+		
+		return chunk()
+	end
+	
 	return impl
 end
