@@ -9,11 +9,11 @@ local modulename = ...
 modulename = modulename:match("^(.+)%..-$") or modulename
 
 local function subrequire(sub, ...)
-	local mod = require(modulename.."."..sub)
+	local mod = {require(modulename.."."..sub)}
 	if select('#', ...) > 0 then
-		mod = mod(...)
+		mod = {mod[1](...)}
 	end
-	return unpack(mod)
+	return (table.unpack or unpack)(mod)
 end
 
 local supportedTypes = string.dump(function() end):sub(7,12)
