@@ -269,9 +269,9 @@ return function(bytecode)
 			return binarytypes.decode.float(bc, idx-4, bigEndian)
 		end
 		
-		local function double(f)
+		local function double()
 			idx = idx+8
-			return binarytypes.decode.float(bc, idx-8, bigEndian)
+			return binarytypes.decode.double(bc, idx-8, bigEndian)
 		end
 		
 		local function ub(n)
@@ -332,7 +332,7 @@ return function(bytecode)
 					elseif type == 1 then
 						constants[i-1] = u1() > 0
 					elseif type == 3 then
-						constants[i-1] = number(true)
+						constants[i-1] = number()
 					elseif type == 4 then
 						constants[i-1] = us()
 					else
