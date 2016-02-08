@@ -20,15 +20,15 @@ local supportedTypes = string.dump(function() end):sub(7,12)
 
 bytecode = {}
 bytecode.debug = false
-bytecode.printDebug = function(...)
+bytecode.printDebug = function(fmt, ...)
 	if bytecode.debug then
-		print(...)
+		print(fmt:format(...))
 	end
 end
 bytecode.version = {}
 
 if _VERSION >= "Lua 5.3" then
-	bytecode.version.lua53 = subrequire("lua53", bytecode)
+	bytecode.version.lua53 = subrequire("bytecode.lua53", bytecode)
 	bytecode.version[0x53] = bytecode.version.lua53
 	bytecode.version.S = bytecode.version.lua51
 else
@@ -133,13 +133,13 @@ else
 				return bigEndian and bit.blshift(a, 8)+b or bit.blshift(b, 8)+a
 			end,
 			u4 = function(bin, index, bigEndian)
-				local a, b, c, d = bin:byte(idx, idx+3)
+				local a, b, c, d = bin:byte(index, index+3)
 				return bigEndian and
 					bit.blshift(a, 24)+bit.blshift(b, 16)+bit.blshift(c, 8)+d or
 					bit.blshift(d, 24)+bit.blshift(c, 16)+bit.blshift(b, 8)+a
 			end,
 			u8 = function(bin, index, bigEndian) --CAUTION: This may output math.huge for large 64bit numbers!
-				local a, b, c, d, e, f, g, h = bin:byte(idx, idx+7)
+				local a, b, c, d, e, f, g, h = bin:byte(index, index+7)
 				return bigEndian and
 					bit.blshift(a, 24)+bit.blshift(b, 16)+bit.blshift(c, 8)+d or
 					bit.blshift(d, 24)+bit.blshift(c, 16)+bit.blshift(b, 8)+a
@@ -176,81 +176,61 @@ else
 end
 
 if _VERSION >= "Lua 5.2" then
-	bytecode.version.lua52 = subrequire("lua52", bytecode)
+	bytecode.version.lua52 = subrequire("bytecode.lua52", bytecode)
 	bytecode.version[0x52] = bytecode.version.lua52
 	bytecode.version.R = bytecode.version.lua51
 end
 
 if _VERSION >= "Lua 5.1" then
-	bytecode.version.lua51 = subrequire("lua51", bytecode)
+	bytecode.version.lua51 = subrequire("bytecode.lua51", bytecode)
 	bytecode.version[0x51] = bytecode.version.lua51
 	bytecode.version.Q = bytecode.version.lua51
 end
 
 local debug = bytecode.printDebug
 local bit = bytecode.bit
+local binarytypes = bytecode.binarytypes
 
 function bytecode.load(bc)
-	debug("Loading binary chunk with size "..#bc.."b")
 	local idx = 1
 	local integer, size_t, number
 	local bigEndian = false
+	
 	local function u1()
 		idx = idx+1
-		return bc:byte(idx-1)
+		return binarytypes.decode.u1(bc, idx-1, bigEndian)
 	end
+	
 	local function u2()
-		local a,b = bc:byte(idx,idx+1)
 		idx = idx+2
-		return bigEndian and bit.blshift(a,8)+b or bit.blshift(b,8)+a
+		return binarytypes.decode.u2(bc, idx-2, bigEndian)
 	end
+	
 	local function u4()
-		local a,b,c,d = bc:byte(idx,idx+3)
 		idx = idx+4
-		return bigEndian and
-			bit.blshift(a,24)+bit.blshift(b,16)+bit.blshift(c,8)+d or
-			bit.blshift(d,24)+bit.blshift(c,16)+bit.blshift(b,8)+a
+		return binarytypes.decode.u4(bc, idx-4, bigEndian)
 	end
+	
 	local function u8()
-		local a,b,c,d,e,f,g,h = bc:byte(idx,idx+7)
 		idx = idx+8
-		return bigEndian and
-			bit.blshift(a,24)+bit.blshift(b,16)+bit.blshift(c,8)+d or
-			bit.blshift(d,24)+bit.blshift(c,16)+bit.blshift(b,8)+a
+		return binarytypes.decode.u8(bc, idx-8, bigEndian)
 	end
+	
 	local function float()
-		local x = bc:sub(idx,idx+3)
-		if bigEndian then x = x:reverse() end
 		idx = idx+4
-		
-		local sign = 1
-		local mantissa = string.byte(x, 3) % 128
-		for i = 2, 1, -1 do mantissa = mantissa * 256 + string.byte(x, i) end
-		if string.byte(x, 4) > 127 then sign = -1 end
-		local exponent = (string.byte(x, 4) % 128) * 2 +
-					   math.floor(string.byte(x, 3) / 128)
-		if exponent == 0 then return 0 end
-		mantissa = (math.ldexp(mantissa, -23) + 1) * sign
-		return math.ldexp(mantissa, exponent - 127)
+		return binarytypes.decode.float(bc, idx-4, bigEndian)
 	end
+	
 	local function double(f)
-		local x = bc:sub(idx,idx+7)
-		if bigEndian then x = x:reverse() end
 		idx = idx+8
-		
-		local sign = 1
-		local mantissa = string.byte(x, 7) % 16
-		for i = 6, 1, -1 do mantissa = mantissa * 256 + string.byte(x, i) end
-		if string.byte(x, 8) > 127 then sign = -1 end
-		local exponent = (string.byte(x, 8) % 128) * 16 +math.floor(string.byte(x, 7) / 16)
-		if exponent == 0 then return 0 end
-		mantissa = (math.ldexp(mantissa, -52) + 1) * sign
-		return math.ldexp(mantissa, exponent - 1023)
+		return binarytypes.decode.float(bc, idx-8, bigEndian)
 	end
+	
 	local function ub(n)
 		idx = idx+n
 		return bc:sub(idx-n,idx-1)
 	end
+	
 	local function us()
 		local size = size_t()
 		--print(size)
@@ -258,9 +238,13 @@ function bytecode.load(bc)
 	end
 	
 	--verify header--
-	assert(ub(4) == "\27Lua", "invalid header signature")
-	local version = u1()
-	assert(version == 0x51 or version == 0x52, ("version not supported: Lua%X"):format(version))
+	assert(bc:sub(1, 4) == "\27Lua", "invalid header signature")
+	local versionCode = bc:byte(5)
+	local version = bytecode.version[versionCode]
+	assert(version and version.load, ("version not supported: Lua %X.%X"):format(math.floor(versionCode/16), versionCode%16))
+	
+	return version.load(bc)
+	--[[
 	do
 		local fmtver = u1()
 		assert(fmtver == 0 or fmtver == 255, "unknown format version "..fmtver)
@@ -391,7 +375,7 @@ function bytecode.load(bc)
 		end
 		return c
 	end
-	return chunk()
+	return chunk()]]
 end
 
 local header = "\27Lua"..string.char(0x51)..string.char(0)..supportedTypes
@@ -545,13 +529,13 @@ function bytecode.new(version)
 end
 
 function bytecode.dump(bc)
-	local ver = bytecode[bc.version]
+	local ver = bytecode.version[bc.header.version]
 	for i=0, #bc.instructions do
 		local o,a,b,c = ver.decode(bc.instructions[i])
 		print(i, ver.instructionNames[o], a, b, c)
 	end
 end
 
-if _VERSION == "Lua 5.3" then
+--[[if _VERSION == "Lua 5.3" then
 	require "luavm.bytecode_53"
-end
+end]]
