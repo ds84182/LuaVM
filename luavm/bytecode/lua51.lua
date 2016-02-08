@@ -241,7 +241,7 @@ return function(bytecode)
 		
 		local idx = 13
 		local integer, size_t, number
-		local bigEndian = false
+		local bigEndian
 		local binarytypes = bytecode.binarytypes
 		
 		local function u1()
@@ -300,7 +300,6 @@ return function(bytecode)
 		local header = impl.loadHeader(bc)
 		
 		assert(header.fmtver == 0 or header.fmtver == 255, "unknown format version: "..header.fmtver)
-		
 		bigEndian = header.bigEndian
 		integer = assert(integralSizes[header.integer], "unsupported integer size: "..header.integer)
 		size_t = assert(integralSizes[header.size_t], "unsupported size_t size: "..header.size_t)
@@ -326,7 +325,6 @@ return function(bytecode)
 			local function constantList()
 				local constants = {}
 				local c = integer()
-				print(c)
 				for i=1, c do
 					local type = u1()
 					if type == 0 then
@@ -340,7 +338,7 @@ return function(bytecode)
 					else
 						error("Type: "..type)
 					end
-					debug("Constant "..(i-1)..": "..tostring(constants[i-1]).." "..type)
+					debug("Constant %d: %s %s", i-1, tostring(constants[i-1]), type)
 				end
 				return constants
 			end
@@ -400,6 +398,146 @@ return function(bytecode)
 		end
 		
 		return chunk()
+	end
+	
+	function impl.save(chunk)
+		local header = chunk.header
+		local bc = {"\27Lua", string.char(header.version, 0)}
+		
+		bc[#bc+1] = string.char(
+			header.bigEndian and 0 or 1,
+			header.integer,
+			header.size_t,
+			header.instruction,
+			header.number,
+			header.number_integral and 1 or 0
+		)
+		
+		local integer, size_t, number
+		local bigEndian = header.bigEndian
+		local binarytypes = bytecode.binarytypes
+		
+		local function u1(value)
+			bc[#bc+1] = string.char(value)
+		end
+		
+		local function u2(value)
+			bc[#bc+1] = binarytypes.encode.u2(value, bigEndian)
+		end
+		
+		local function u4(value)
+			bc[#bc+1] = binarytypes.encode.u4(value, bigEndian)
+		end
+		
+		local function u8(value)
+			bc[#bc+1] = binarytypes.encode.u8(value, bigEndian)
+		end
+		
+		local function float(value)
+			bc[#bc+1] = binarytypes.encode.float(value, bigEndian)
+		end
+		
+		local function double(value)
+			bc[#bc+1] = binarytypes.encode.double(value, bigEndian)
+		end
+		
+		local function us(str)
+			size_t(#str+1)
+			bc[#bc+1] = str
+			bc[#bc+1] = string.char(0)
+		end
+		
+		local function len(t)
+			local n = 0
+			for i, v in pairs(t) do n = n+1 end
+			return n
+		end
+		
+		local integralSizes = {
+			[1] = u1,
+			[2] = u2,
+			[4] = u4,
+			[8] = u8
+		}
+		
+		local numericSizes = {
+			[4] = float,
+			[8] = double
+		}
+		
+		assert(header.fmtver == 0 or header.fmtver == 255, "unknown format version: "..header.fmtver)
+		bigEndian = header.bigEndian
+		integer = assert(integralSizes[header.integer], "unsupported integer size: "..header.integer)
+		size_t = assert(integralSizes[header.size_t], "unsupported size_t size: "..header.size_t)
+		assert(header.instruction == 4, "unsupported instruction size: "..header.instruction)
+		
+		--integral or numerical number stuff
+		do
+			local integralNumbers = header.number_integral
+			local size = header.number
+			number = assert(integralNumbers and integralSizes[size] or numericSizes[size], "unsupported number size: "..(integralNumbers and "integral" or "floating").." "..size)
+		end
+		
+		local function dumpChunk(chunk)
+			us(chunk.name)
+			integer(chunk.lineDefined)
+			integer(chunk.lastLineDefined)
+			u1(chunk.nupval)
+			u1(chunk.nparam)
+			u1(chunk.isvararg)
+			u1(chunk.maxStack)
+			
+			local lenInstructions = len(chunk.instructions)
+			integer(lenInstructions)
+			for i=0, lenInstructions-1 do
+				u4(chunk.instructions[i])
+			end
+			
+			local lenConstants = len(chunk.constants)
+			integer(lenConstants)
+			for i=0, lenConstants-1 do
+				local v = chunk.constants[i]
+				local t = type(v)
+				u1(t == "nil" and 0 or t == "boolean" and 1 or t == "number" and 3 or t == "string" and 4 or error("Unknown constant type."))
+				if t == "boolean" then
+					u1(v and 1 or 0)
+				elseif t == "number" then
+					double(v)
+				elseif t == "string" then
+					us(v)
+				end
+			end
+			
+			local lenFunctionPrototypes = len(chunk.functionPrototypes)
+			integer(lenFunctionPrototypes)
+			for i=0, lenFunctionPrototypes-1 do
+				writeChunk(chunk.functionPrototypes[i])
+			end
+			
+			local lenSourceLines = len(chunk.sourceLines)
+			integer(lenSourceLines)
+			for i=0, lenSourceLines-1 do
+				integer(chunk.sourceLines[i])
+			end
+			
+			local lenLocals = len(chunk.locals)
+			integer(lenLocals)
+			for i=0, lenLocals-1 do
+				local l = chunk.locals[i]
+				us(l.name)
+				integer(l.startpc)
+				integer(l.endpc)
+			end
+			
+			local lenUpvalues = len(chunk.upvalues)
+			integer(lenUpvalues)
+			for i=0, lenUpvalues-1 do
+				us(chunk.upvalues[i])
+			end
+		end
+		
+		dumpChunk(chunk)
+		return table.concat(bc)
 	end
 	
 	return impl
