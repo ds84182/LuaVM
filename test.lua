@@ -35,15 +35,15 @@ local testbc = string.dump(function() return "Hello" end)
 local testbcl = bytecode.load(testbc)
 local testbco = bytecode.save(testbcl)
 assert(testbc == testbco,"Bytecode save test failed, INCONSISTENT!")
-print(vm.run(testbcl))
+print(vm.lua51.run(testbcl))
 print(loadstring(testbc)())
 print(loadstring(testbco)())
 
 loadfile("hello.lua")()
-vm.run(bytecode.load(string.dump(loadfile("hello.lua"))))
+vm.lua51.run(bytecode.load(string.dump(loadfile("hello.lua"))))
 
 local opscalled = 0
-vm.run(
+vm.lua51.run(
 	bytecode.load(string.dump(function() while true do end end)),
 	nil,
 	nil,
