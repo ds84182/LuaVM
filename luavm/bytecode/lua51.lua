@@ -205,7 +205,7 @@ return function(bytecode)
 		header.fmtver = fmtver
 		debug("Format Version: %02X", fmtver)
 		
-		local types = bc:sub(7, 13)
+		local types = bc:sub(7, 12)
 		debug("Types: "..types:gsub(".", function(c) return string.format("%02X ", c:byte()) end))
 		
 		local bigEndian = types:byte(1) ~= 1
