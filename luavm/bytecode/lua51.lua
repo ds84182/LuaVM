@@ -540,5 +540,24 @@ return function(bytecode)
 		return table.concat(bc)
 	end
 	
+	function impl.new(header)
+		return {
+			header = header,
+			lineDefined = 0,
+			isvararg = 2,
+			sourceLines = {},
+			nparam = 0,
+			lastLineDefined = 0,
+			maxStack = 2,
+			upvalues = {},
+			instructions = {[0]=impl.defaultReturn},
+			locals = {},
+			functionPrototypes = {},
+			nupval = 0,
+			name = "",
+			constants = {}
+		}
+	end
+	
 	return impl
 end

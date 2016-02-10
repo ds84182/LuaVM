@@ -25,6 +25,9 @@ bytecode.printDebug = function(fmt, ...)
 		print(fmt:format(...))
 	end
 end
+
+local templatedump = string.dump(function() end)
+bytecode.currentVersion = templatedump:byte(5)
 bytecode.version = {}
 
 if _VERSION >= "Lua 5.3" then
@@ -506,10 +509,32 @@ function bytecode.save(chunk)
 	return table.concat(bc)]]
 end
 
-function bytecode.new(version)
-	version = version or 0x51
+function bytecode.new(versionCode, header)
+	versionCode = versionCode or bytecode.currentVersion
+	local version = bytecode.version[versionCode]
+	assert(version and version.new, ("version not supported: Lua %X.%X"):format(math.floor(versionCode/16), versionCode%16))
 	
-	if version == 0x51 then
+	--the header can be pulled from 3 different sources:
+		--the original that was passed
+		--the native header, specified by a loadHeader
+		--bit width standards
+	if not header then
+		if version.loadHeader then
+			header = version.loadHeader(templatedump) --load the currently running Lua version's headers
+			header.version = versionCode --change the header's version, so it targets a different version of Lua
+		else
+			-- TODO: A sensible default
+			error("header could not be loaded from environment")
+		end
+	else
+		if header.version and header.version ~= versionCode then
+			error("header version doesn't match given version")
+		end
+	end
+	
+	return version.new(header)
+	
+	--[[if version == 0x51 then
 		return
 		{
 			version = 0x51,
@@ -531,7 +556,7 @@ function bytecode.new(version)
 		return {"TODO"}
 	else
 		error("Cannot create bytecode for "..string.format("%X",version)..".")
-	end
+	end]]
 end
 
 function bytecode.dump(bc)
