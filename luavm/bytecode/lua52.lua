@@ -18,11 +18,10 @@ return function(bytecode)
 	local iABC = 0
 	local iABx = 1
 	local iAsBx = 2
-	local iA = 3
 	local iAx = 4
 
 	local instructionFormats = {
-		[0]=iABC,iABx,iA,iABC,iABC,
+		[0]=iABC,iABx,iABC,iABC,iABC,
 		iABC,iABC,iABC,
 		iABC,iABC,iABC,iABC,
 		iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,iABC,
@@ -85,12 +84,18 @@ return function(bytecode)
 	function impl.encode(inst,a,b,c)
 		inst = type(inst) == "string" and ins[inst] or inst
 		local format = instructionFormats[inst]
-		return
-			format == iABC and
-			bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b,0x1FF),23), bit.blshift(bit.band(c,0x1FF),14)) or
-			format == iABx and
-			bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b,0x3FFFF),14)) or
-			bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b+131071,0x3FFFF),14))
+		
+		if format == iABC then
+			return bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b,0x1FF),23), bit.blshift(bit.band(c,0x1FF),14))
+		elseif format == iABx then
+			return bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b,0x3FFFF),14))
+		elseif format == iAsBx then
+			return bit.bor(inst,bit.blshift(bit.band(a,0xFF),6),bit.blshift(bit.band(b+131071,0x3FFFF),14))
+		elseif format == iAx then
+			return bit.bor(inst,bit.blshift(a,6))
+		else
+			error("unknown opcode "..inst)
+		end
 	end
 
 	function impl.decode(inst)
@@ -103,8 +108,10 @@ return function(bytecode)
 		elseif format == iAsBx then
 			local sBx = bit.band(bit.brshift(inst,14),0x3FFFF)-131071
 			return opcode, bit.band(bit.brshift(inst,6),0xFF), sBx
+		elseif format == iAx then
+			return opcode, bit.brshift(inst,6)
 		else
-			error(opcode.." "..format)
+			error("unknown opcode "..opcode)
 		end
 	end
 	
@@ -472,6 +479,8 @@ return function(bytecode)
 		dumpChunk(chunk)
 		return table.concat(bc)
 	end
+	
+	--TODO: impl.new
 	
 	return impl
 end
