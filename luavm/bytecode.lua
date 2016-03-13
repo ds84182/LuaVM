@@ -33,10 +33,10 @@ bytecode.version = {}
 if _VERSION >= "Lua 5.3" then
 	bytecode.version.lua53 = subrequire("bytecode.lua53", bytecode)
 	bytecode.version[0x53] = bytecode.version.lua53
-	bytecode.version.S = bytecode.version.lua51
+	bytecode.version.S = bytecode.version.lua53
 else
 	--If not 5.3 or above, create bytecode.bit and bytecode.binarytypes
-	
+
 	--use bit32 if available, else use require "bit"
 	if bit32 then
 		bytecode.bit = {
@@ -48,20 +48,20 @@ else
 		}
 	else
 		local bitAvailable, bit = pcall(require, "bit")
-		
+
 		if bitAvailable then
 			bytecode.bit = bit
 		else
 			error("TODO: Custom bitwise implementation here!")
 		end
 	end
-	
+
 	local bit = bytecode.bit
-	
+
 	local function grab_byte(v)
 		return math.floor(v / 256), string.char(math.floor(v) % 256)
 	end
-	
+
 	bytecode.binarytypes = {
 		encode = {
 			u1 = function(value, bigEndian)
@@ -72,7 +72,7 @@ else
 					bit.band(value,0xFF),
 					bit.brshift(bit.band(value,0xFF00),8)
 				)
-				
+
 				if bigEndian then out = out:reverse() end
 				return out
 			end,
@@ -83,7 +83,7 @@ else
 					bit.brshift(bit.band(value, 0xFF0000), 16),
 					bit.brshift(bit.band(value, 0xFF000000), 24)
 				)
-				
+
 				if bigEndian then out = out:reverse() end
 				return out
 			end,
@@ -98,7 +98,7 @@ else
 					bit.brshift(bit.band(value, 0xFF000000000000), 48),
 					bit.brshift(bit.band(value, 0xFF00000000000000), 56)
 				)
-				
+
 				if bigEndian then out = out:reverse() end
 				return out
 			end,
@@ -122,7 +122,7 @@ else
 				end
 				x, byte = grab_byte(exponent * 16 + x); v = v..byte -- 55:48
 				x, byte = grab_byte(sign * 128 + x); v = v..byte -- 63:56
-				
+
 				if bigEndian then v = v:reverse() end
 				return v
 			end,
@@ -150,7 +150,7 @@ else
 			float = function(bin, index, bigEndian)
 				local x = bin:sub(index, index+3)
 				if bigEndian then x = x:reverse() end
-				
+
 				local sign = 1
 				local mantissa = string.byte(x, 3) % 128
 				for i = 2, 1, -1 do mantissa = mantissa * 256 + string.byte(x, i) end
@@ -164,7 +164,7 @@ else
 			double = function(bin, index, bigEndian)
 				local x = bin:sub(index, index+7)
 				if bigEndian then x = x:reverse() end
-				
+
 				local sign = 1
 				local mantissa = string.byte(x, 7) % 16
 				for i = 6, 1, -1 do mantissa = mantissa * 256 + string.byte(x, i) end
@@ -198,54 +198,54 @@ function bytecode.load(bc)
 	local idx = 1
 	local integer, size_t, number
 	local bigEndian = false
-	
+
 	local function u1()
 		idx = idx+1
 		return binarytypes.decode.u1(bc, idx-1, bigEndian)
 	end
-	
+
 	local function u2()
 		idx = idx+2
 		return binarytypes.decode.u2(bc, idx-2, bigEndian)
 	end
-	
+
 	local function u4()
 		idx = idx+4
 		return binarytypes.decode.u4(bc, idx-4, bigEndian)
 	end
-	
+
 	local function u8()
 		idx = idx+8
 		return binarytypes.decode.u8(bc, idx-8, bigEndian)
 	end
-	
+
 	local function float()
 		idx = idx+4
 		return binarytypes.decode.float(bc, idx-4, bigEndian)
 	end
-	
+
 	local function double(f)
 		idx = idx+8
 		return binarytypes.decode.float(bc, idx-8, bigEndian)
 	end
-	
+
 	local function ub(n)
 		idx = idx+n
 		return bc:sub(idx-n,idx-1)
 	end
-	
+
 	local function us()
 		local size = size_t()
 		--print(size)
 		return ub(size):sub(1,-2)
 	end
-	
+
 	--verify header--
 	assert(bc:sub(1, 4) == "\27Lua", "invalid header signature")
 	local versionCode = bc:byte(5)
 	local version = bytecode.version[versionCode]
 	assert(version and version.load, ("version not supported: Lua %X.%X"):format(math.floor(versionCode/16), versionCode%16))
-	
+
 	return version.load(bc)
 	--[[
 	do
@@ -266,7 +266,7 @@ function bytecode.load(bc)
 		ub(6)
 	end
 	debug("header is legit")
-	
+
 	local function chunk()
 		local function instructionList()
 			local instructions = {}
@@ -276,7 +276,7 @@ function bytecode.load(bc)
 			end
 			return instructions
 		end
-		
+
 		local function constantList()
 			local constants = {}
 			local c = integer()
@@ -298,7 +298,7 @@ function bytecode.load(bc)
 			end
 			return constants
 		end
-		
+
 		local function functionPrototypeList()
 			local functionPrototypes = {}
 			for i=1, integer() do
@@ -306,7 +306,7 @@ function bytecode.load(bc)
 			end
 			return functionPrototypes
 		end
-		
+
 		local function sourceLineList()
 			local sourceLines = {}
 			for i=1, integer() do
@@ -314,7 +314,7 @@ function bytecode.load(bc)
 			end
 			return sourceLines
 		end
-		
+
 		local function localList()
 			local locals = {}
 			for i=1, integer() do
@@ -326,7 +326,7 @@ function bytecode.load(bc)
 			end
 			return locals
 		end
-		
+
 		local function upvalueList()
 			local upvalues = {}
 			for i=1, integer() do
@@ -334,7 +334,7 @@ function bytecode.load(bc)
 			end
 			return upvalues
 		end
-		
+
 		--extract an lua chunk into a table--
 		local c = {version = version}
 		if version == 0x51 then
@@ -386,31 +386,31 @@ function bytecode.save(chunk)
 	local versionCode = chunk.header.version
 	local version = bytecode.version[versionCode]
 	assert(version and version.save, ("version not supported: Lua %X.%X"):format(math.floor(versionCode/16), versionCode%16))
-	
+
 	return version.save(chunk)
-	
+
 	--[[assert(chunk.version == 0x51, "Cannot save Lua versions greater than 5.1! Sorry!")
 	local bc = {header}
-	
+
 	local function w1(b)
 		bc[#bc+1] = string.char(b)
 	end
-	
+
 	local function w2(s)
 		bc[#bc+1] = string.char(bit.band(s,0xFF),bit.brshift(bit.band(s,0xFF00),8))
 	end
-	
+
 	local function w4(s)
 		bc[#bc+1] = string.char(
 			bit.band(s,0xFF),bit.brshift(bit.band(s,0xFF00),8),
 			bit.brshift(bit.band(s,0xFF0000),16),bit.brshift(bit.band(s,0xFF000000),24)
 		)
 	end
-	
+
 	local function grab_byte(v)
 		return math.floor(v / 256), string.char(math.floor(v) % 256)
 	end
-	
+
 	local function double(x)
 		local sign = 0
 		if x < 0 then sign = 1; x = -x end
@@ -430,29 +430,29 @@ function bytecode.save(chunk)
 		x, byte = grab_byte(sign * 128 + x); v = v..byte -- 63:56
 		bc[#bc+1] = v
 	end
-	
+
 	local function w8(s)
 		w4(s)
 		w4(0)
 	end
-	
+
 	local integer = supportedTypes:byte(2) == 8 and w8 or w4
 	if integer == u8 then print("Caution: Because you are on a 128bit(!?) platform, LuaVM2 will chop off the upper 4 bytes from integer!") end
 	local size_t = supportedTypes:byte(3) == 8 and w8 or w4
 	if size_t == u8 then print("Caution: Because you are on a 64bit platform, LuaVM2 will chop off the upper 4 bytes from size_t!") end
-	
+
 	local function ws(str)
 		size_t(#str+1)
 		bc[#bc+1] = str
 		bc[#bc+1] = string.char(0)
 	end
-	
+
 	local function len(t)
 		local n = 0
 		for i, v in pairs(t) do n = n+1 end
 		return n
 	end
-	
+
 	local function writeChunk(chunk)
 		ws(chunk.name)
 		integer(chunk.lineDefined)
@@ -461,12 +461,12 @@ function bytecode.save(chunk)
 		w1(chunk.nparam)
 		w1(chunk.isvararg)
 		w1(chunk.maxStack)
-		
+
 		integer(len(chunk.instructions))
 		for i=0, len(chunk.instructions)-1 do
 			w4(chunk.instructions[i])
 		end
-		
+
 		integer(len(chunk.constants))
 		for i=0, len(chunk.constants)-1 do
 			local v = chunk.constants[i]
@@ -480,17 +480,17 @@ function bytecode.save(chunk)
 				ws(v)
 			end
 		end
-		
+
 		integer(len(chunk.functionPrototypes))
 		for i=0, len(chunk.functionPrototypes)-1 do
 			writeChunk(chunk.functionPrototypes[i])
 		end
-		
+
 		integer(len(chunk.sourceLines))
 		for i=0, len(chunk.sourceLines)-1 do
 			integer(chunk.sourceLines[i])
 		end
-		
+
 		integer(len(chunk.locals))
 		for i=0, len(chunk.locals)-1 do
 			local l = chunk.locals[i]
@@ -498,13 +498,13 @@ function bytecode.save(chunk)
 			integer(l.startpc)
 			integer(l.endpc)
 		end
-		
+
 		integer(len(chunk.upvalues))
 		for i=0, len(chunk.upvalues)-1 do
 			ws(chunk.upvalues[i])
 		end
 	end
-	
+
 	writeChunk(chunk)
 	return table.concat(bc)]]
 end
@@ -513,7 +513,7 @@ function bytecode.new(versionCode, header)
 	versionCode = versionCode or bytecode.currentVersion
 	local version = bytecode.version[versionCode]
 	assert(version and version.new, ("version not supported: Lua %X.%X"):format(math.floor(versionCode/16), versionCode%16))
-	
+
 	--the header can be pulled from 3 different sources:
 		--the original that was passed
 		--the native header, specified by a loadHeader
@@ -531,9 +531,9 @@ function bytecode.new(versionCode, header)
 			error("header version doesn't match given version")
 		end
 	end
-	
+
 	return version.new(header)
-	
+
 	--[[if version == 0x51 then
 		return
 		{
