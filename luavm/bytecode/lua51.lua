@@ -1,11 +1,11 @@
 return function(bytecode)
 	local impl = {}
-	
+
 	local debug = bytecode.printDebug
 	local bit = bytecode.bit
-	
+
 	-- instruction definitions
-	
+
 	local instructionNames = {
 		[0]="MOVE","LOADK","LOADBOOL","LOADNIL",
 		"GETUPVAL","GETGLOBAL","GETTABLE",
@@ -14,7 +14,7 @@ return function(bytecode)
 		"JMP","EQ","LT","LE","TEST","TESTSET","CALL","TAILCALL","RETURN",
 		"FORLOOP","FORPREP","TFORLOOP","SETLIST","CLOSE","CLOSURE","VARARG"
 	}
-	
+
 	local iABC = 0
 	local iABx = 1
 	local iAsBx = 2
@@ -36,7 +36,7 @@ return function(bytecode)
 	impl.defaultReturn = 8388638 --Default return instruction, this is the extra return found at the end of instruction streams
 
 	-- instruction constants
-	
+
 	local MOVE = 0
 	local LOADK = 1
 	local LOADBOOL = 2
@@ -75,7 +75,7 @@ return function(bytecode)
 	local CLOSE = 35
 	local CLOSURE = 36
 	local VARARG = 37
-	
+
 	-- instruction encoding and decoding
 
 	function impl.encode(inst,a,b,c)
@@ -103,9 +103,9 @@ return function(bytecode)
 			error(opcode.." "..format)
 		end
 	end
-	
+
 	-- bytecode patching extras
-	
+
 	impl.patcher = {}
 
 	local function patchJumpsAndAdd(bc, pc, op)
@@ -151,31 +151,31 @@ return function(bytecode)
 			bc.instructions[i] = impl.encode(o,a,b,c)
 			print(i,bc.instructions[i])
 		end
-	
+
 		for i=#bc.instructions, pc, -1 do
 			bc.instructions[i+1] = bc.instructions[i]
 			bc.sourceLines[i+1] = bc.sourceLines[i]
 		end
 		bc.instructions[pc] = op
 	end
-	
+
 	-- Insert a single instruction at a specific program counter index
 	function impl.patcher.insert(bc, pc, inst)
 		--insert commands, fix jump targets--
 		patchJumpsAndAdd(bc, pc, inst)
 	end
-	
+
 	-- Replaces an instruction at a program counter index with another instruction
 	function impl.patcher.replace(bc, pc, inst)
 		bc.instructions[pc] = inst
 	end
-	
+
 	-- Attempts to find an instruction after a specific program counter index
 	function impl.patcher.find(bc, pc, o)
 		if type(o) == "string" then
 			o = ins[o]
 		end
-		
+
 		for i=pc+1, #bc.instructions do
 			local no = impl.decode(bc.instructions[i])
 			if no == o then
@@ -191,39 +191,39 @@ return function(bytecode)
 				return i
 			end
 		end
-		
+
 		bc.constants[#bc.constants+1] = const
 		return #bc.constants
 	end
-	
+
 	-- bytecode loading
-	
+
 	function impl.loadHeader(bc)
 		local header = {version = 0x51}
-		
+
 		local fmtver = bc:byte(6)
 		header.fmtver = fmtver
 		debug("Format Version: %02X", fmtver)
-		
+
 		local types = bc:sub(7, 12)
 		debug("Types: "..types:gsub(".", function(c) return string.format("%02X ", c:byte()) end))
-		
+
 		local bigEndian = types:byte(1) ~= 1
 		header.bigEndian = bigEndian
 		debug("Big Endian: %s", tostring(bigEndian))
-		
+
 		local integer = types:byte(2)
 		header.integer = integer
 		debug("Integer Size: %d bytes", integer)
-		
+
 		local size_t = types:byte(3)
 		header.size_t = size_t
 		debug("Size_T Size: %d bytes", size_t)
-		
+
 		local instruction = types:byte(4)
 		header.instruction = instruction
 		debug("Instruction Size: %d bytes", instruction)
-		
+
 		--integral or numerical number stuff
 		do
 			local integralNumbers = types:byte(6) ~= 0
@@ -232,86 +232,86 @@ return function(bytecode)
 			header.number = size
 			debug("Numerical Format: %d bytes <%s>", size, integralNumbers and "integral" or "floating")
 		end
-		
+
 		return header
 	end
-	
+
 	function impl.load(bc)
 		debug("Lua 5.1 Bytecode Loader")
-		
+
 		local idx = 13
 		local integer, size_t, number
 		local bigEndian
 		local binarytypes = bytecode.binarytypes
-		
+
 		local function u1()
 			idx = idx+1
 			return binarytypes.decode.u1(bc, idx-1, bigEndian)
 		end
-		
+
 		local function u2()
 			idx = idx+2
 			return binarytypes.decode.u2(bc, idx-2, bigEndian)
 		end
-		
+
 		local function u4()
 			idx = idx+4
 			return binarytypes.decode.u4(bc, idx-4, bigEndian)
 		end
-		
+
 		local function u8()
 			idx = idx+8
 			return binarytypes.decode.u8(bc, idx-8, bigEndian)
 		end
-		
+
 		local function float()
 			idx = idx+4
 			return binarytypes.decode.float(bc, idx-4, bigEndian)
 		end
-		
+
 		local function double()
 			idx = idx+8
 			return binarytypes.decode.double(bc, idx-8, bigEndian)
 		end
-		
+
 		local function ub(n)
 			idx = idx+n
 			return bc:sub(idx-n,idx-1)
 		end
-		
+
 		local function us()
 			local size = size_t()
 			--print(size)
 			return ub(size):sub(1,-2)
 		end
-		
+
 		local integralSizes = {
 			[1] = u1,
 			[2] = u2,
 			[4] = u4,
 			[8] = u8
 		}
-		
+
 		local numericSizes = {
 			[4] = float,
 			[8] = double
 		}
-		
+
 		local header = impl.loadHeader(bc)
-		
+
 		assert(header.fmtver == 0 or header.fmtver == 255, "unknown format version: "..header.fmtver)
 		bigEndian = header.bigEndian
 		integer = assert(integralSizes[header.integer], "unsupported integer size: "..header.integer)
 		size_t = assert(integralSizes[header.size_t], "unsupported size_t size: "..header.size_t)
 		assert(header.instruction == 4, "unsupported instruction size: "..header.instruction)
-		
+
 		--integral or numerical number stuff
 		do
 			local integralNumbers = header.number_integral
 			local size = header.number
 			number = assert(integralNumbers and integralSizes[size] or numericSizes[size], "unsupported number size: "..(integralNumbers and "integral" or "floating").." "..size)
 		end
-		
+
 		local function chunk()
 			local function instructionList()
 				local instructions = {}
@@ -319,13 +319,14 @@ return function(bytecode)
 				for i=1, count do
 					instructions[i-1] = u4()
 				end
+				instructions.count = count
 				return instructions
 			end
-			
+
 			local function constantList()
 				local constants = {}
-				local c = integer()
-				for i=1, c do
+				local count = integer()
+				for i=1, count do
 					local type = u1()
 					if type == 0 then
 						constants[i-1] = nil
@@ -340,45 +341,54 @@ return function(bytecode)
 					end
 					debug("Constant %d: %s %s", i-1, tostring(constants[i-1]), type)
 				end
+				constants.count = count
 				return constants
 			end
-			
+
 			local function functionPrototypeList()
 				local functionPrototypes = {}
-				for i=1, integer() do
+				local count = integer()
+				for i=1, count do
 					functionPrototypes[i-1] = chunk()
 				end
+				functionPrototypes.count = count
 				return functionPrototypes
 			end
-			
+
 			local function sourceLineList()
 				local sourceLines = {}
-				for i=1, integer() do
+				local count = integer()
+				for i=1, count do
 					sourceLines[i-1] = integer()
 				end
+				sourceLines.count = count
 				return sourceLines
 			end
-			
+
 			local function localList()
 				local locals = {}
-				for i=1, integer() do
+				local count = integer()
+				for i=1, count do
 					locals[i-1] = {
 						name = us(),
 						startpc = integer(),
 						endpc = integer()
 					}
 				end
+				locals.count = count
 				return locals
 			end
-			
+
 			local function upvalueList()
 				local upvalues = {}
-				for i=1, integer() do
+				local count = integer()
+				for i=1, count do
 					upvalues[i-1] = us()
 				end
+				upvalues.count = count
 				return upvalues
 			end
-			
+
 			--extract an lua chunk into a table--
 			local c = {header = header}
 			c.name = us()
@@ -396,14 +406,14 @@ return function(bytecode)
 			c.upvalues = upvalueList()
 			return c
 		end
-		
+
 		return chunk()
 	end
-	
+
 	function impl.save(chunk)
 		local header = chunk.header
 		local bc = {"\27Lua", string.char(header.version, 0)}
-		
+
 		bc[#bc+1] = string.char(
 			header.bigEndian and 0 or 1,
 			header.integer,
@@ -412,72 +422,72 @@ return function(bytecode)
 			header.number,
 			header.number_integral and 1 or 0
 		)
-		
+
 		local integer, size_t, number
 		local bigEndian = header.bigEndian
 		local binarytypes = bytecode.binarytypes
-		
+
 		local function u1(value)
 			bc[#bc+1] = string.char(value)
 		end
-		
+
 		local function u2(value)
 			bc[#bc+1] = binarytypes.encode.u2(value, bigEndian)
 		end
-		
+
 		local function u4(value)
 			bc[#bc+1] = binarytypes.encode.u4(value, bigEndian)
 		end
-		
+
 		local function u8(value)
 			bc[#bc+1] = binarytypes.encode.u8(value, bigEndian)
 		end
-		
+
 		local function float(value)
 			bc[#bc+1] = binarytypes.encode.float(value, bigEndian)
 		end
-		
+
 		local function double(value)
 			bc[#bc+1] = binarytypes.encode.double(value, bigEndian)
 		end
-		
+
 		local function us(str)
 			size_t(#str+1)
 			bc[#bc+1] = str
 			bc[#bc+1] = string.char(0)
 		end
-		
+
 		local function len(t)
 			local n = 0
 			for i, v in pairs(t) do n = n+1 end
 			return n
 		end
-		
+
 		local integralSizes = {
 			[1] = u1,
 			[2] = u2,
 			[4] = u4,
 			[8] = u8
 		}
-		
+
 		local numericSizes = {
 			[4] = float,
 			[8] = double
 		}
-		
+
 		assert(header.fmtver == 0 or header.fmtver == 255, "unknown format version: "..header.fmtver)
 		bigEndian = header.bigEndian
 		integer = assert(integralSizes[header.integer], "unsupported integer size: "..header.integer)
 		size_t = assert(integralSizes[header.size_t], "unsupported size_t size: "..header.size_t)
 		assert(header.instruction == 4, "unsupported instruction size: "..header.instruction)
-		
+
 		--integral or numerical number stuff
 		do
 			local integralNumbers = header.number_integral
 			local size = header.number
 			number = assert(integralNumbers and integralSizes[size] or numericSizes[size], "unsupported number size: "..(integralNumbers and "integral" or "floating").." "..size)
 		end
-		
+
 		local function dumpChunk(chunk)
 			us(chunk.name)
 			integer(chunk.lineDefined)
@@ -486,14 +496,14 @@ return function(bytecode)
 			u1(chunk.nparam)
 			u1(chunk.isvararg)
 			u1(chunk.maxStack)
-			
-			local lenInstructions = len(chunk.instructions)
+
+			local lenInstructions = chunk.instructions.count or len(chunk.instructions)
 			integer(lenInstructions)
 			for i=0, lenInstructions-1 do
 				u4(chunk.instructions[i])
 			end
-			
-			local lenConstants = len(chunk.constants)
+
+			local lenConstants = chunk.constants.count or len(chunk.constants)
 			integer(lenConstants)
 			for i=0, lenConstants-1 do
 				local v = chunk.constants[i]
@@ -507,20 +517,20 @@ return function(bytecode)
 					us(v)
 				end
 			end
-			
-			local lenFunctionPrototypes = len(chunk.functionPrototypes)
+
+			local lenFunctionPrototypes = chunk.functionPrototypes.count or len(chunk.functionPrototypes)
 			integer(lenFunctionPrototypes)
 			for i=0, lenFunctionPrototypes-1 do
 				writeChunk(chunk.functionPrototypes[i])
 			end
-			
-			local lenSourceLines = len(chunk.sourceLines)
+
+			local lenSourceLines = chunk.sourceLines.count or len(chunk.sourceLines)
 			integer(lenSourceLines)
 			for i=0, lenSourceLines-1 do
 				integer(chunk.sourceLines[i])
 			end
-			
-			local lenLocals = len(chunk.locals)
+
+			local lenLocals = chunk.locals.count or len(chunk.locals)
 			integer(lenLocals)
 			for i=0, lenLocals-1 do
 				local l = chunk.locals[i]
@@ -528,36 +538,36 @@ return function(bytecode)
 				integer(l.startpc)
 				integer(l.endpc)
 			end
-			
-			local lenUpvalues = len(chunk.upvalues)
+
+			local lenUpvalues = chunk.upvalues.count or len(chunk.upvalues)
 			integer(lenUpvalues)
 			for i=0, lenUpvalues-1 do
 				us(chunk.upvalues[i])
 			end
 		end
-		
+
 		dumpChunk(chunk)
 		return table.concat(bc)
 	end
-	
+
 	function impl.new(header)
 		return {
 			header = header,
 			lineDefined = 0,
 			isvararg = 2,
-			sourceLines = {},
+			sourceLines = {count=0},
 			nparam = 0,
 			lastLineDefined = 0,
 			maxStack = 2,
-			upvalues = {},
-			instructions = {[0]=impl.defaultReturn},
-			locals = {},
-			functionPrototypes = {},
+			upvalues = {count=0},
+			instructions = {count=1, [0]=impl.defaultReturn},
+			locals = {count=0},
+			functionPrototypes = {count=0},
 			nupval = 0,
 			name = "",
-			constants = {}
+			constants = {count=0}
 		}
 	end
-	
+
 	return impl
 end
