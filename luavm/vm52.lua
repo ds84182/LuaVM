@@ -75,12 +75,13 @@ do
 	}
 	
 	function vm.lua52.run(chunk, args, upvals, globals, hook)
-		if chunk.version ~= 0x52 then error(string.format("attempt to run %x bytecode in 52",chunk.version)) end
+		if chunk.header.version ~= 0x52 then error(string.format("attempt to run %x bytecode in 52",chunk.header.version)) end
 		local R = {}
 		local top = 0
 		local pc = 0
 		local code = chunk.instructions
 		local constants = chunk.constants
+		local openUpvalues = {}
 		args = args or {}
 		globals = globals or _G
 		upvals = upvals or {[0]=globals}
@@ -238,6 +239,17 @@ do
 					R[a] = table.concat(sct)
 				elseif o == JMP then
 					pc = (pc+b)
+					-- Lua 5.2 JMP closes upvalues
+					if a > 0 then
+						for i=a-1, chunk.maxStack do
+							if openUpvalues[i] then
+								local ouv = openUpvalues[i]
+								ouv.type = 2 --closed
+								ouv.storage = R[ouv.reg]
+								openUpvalues[i] = nil
+							end
+						end
+					end
 				elseif o == CALL then
 					attemptCall(R[a])
 					local ret
@@ -402,31 +414,33 @@ do
 					local upvalues = setmetatable({},{__index=function(_,i)
 						if not upvaldef[i] then error("unknown upvalue") end
 						local uvd = upvaldef[i]
-						if uvd.type == 0 then --local upvalue
+						if uvd.type == 0 then -- local upvalue
 							return R[uvd.reg]
-						elseif uvd.type == 1 then
+						elseif uvd.type == 1 then -- upvalue upvalue
 							return upvals[uvd.reg]
-						else
+						else -- closed upvalue
 							return uvd.storage
 						end
 					end,__newindex=function(_,i,v)
 						if not upvaldef[i] then error("unknown upvalue") end
 						local uvd = upvaldef[i]
-						if uvd.type == 0 then --local upvalue
+						if uvd.type == 0 then -- local upvalue
 							R[uvd.reg] = v
-						elseif uvd.type == 1 then
+						elseif uvd.type == 1 then -- upvalue upvalue
 							upvals[uvd.reg] = v
-						else
+						else -- closed upvalue
 							uvd.storage = v
 						end
 					end})
 					R[a] = function(...)
 						return vm.lua52.run(proto, pack(...), upvalues, globals, hook)
 					end
-					for i, uv in pairs(proto.upvalues) do
+					for i=0, proto.upvalues.count-1 do
+						local uv = proto.upvalues[i]
 						debug("UPVALUE",proto.upvaluesDebug[i],i,uv.idx,uv.instack)
 						if uv.instack > 0 then
 							upvaldef[i] = {type=0,reg=uv.idx}
+							openUpvalues[uv.idx] = upvaldef[i]
 						else
 							upvaldef[i] = {type=1,reg=uv.idx}
 						end
@@ -438,6 +452,15 @@ do
 				end
 			end
 		end))
+		-- Implicit Upvalue Close
+		for i=0, chunk.maxStack do
+			if openUpvalues[i] then
+				local ouv = openUpvalues[i]
+				ouv.type = 2 --closed
+				ouv.storage = R[ouv.reg]
+				openUpvalues[i] = nil
+			end
+		end
 		if not ret[1] then
 			error(tostring(ret[2]).."\n"..tostring(chunk.name).." at pc "..(pc-1).." line "..tostring(chunk.sourceLines[pc-1]),0)
 		else
