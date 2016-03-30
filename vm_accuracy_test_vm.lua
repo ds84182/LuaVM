@@ -1,8 +1,6 @@
 require "vm_accuracy_test_common"
-local vmversion = _VERSION:gsub("%D","")
-require "luavm.bytecode"
-require("luavm.vm"..vmversion)
-local lua = vm["lua"..vmversion]
+local bytecode = require "luavm.bytecode"
+local lua = require "luavm.vm".native()
 
 for test in iterateTests() do
 	if test:sub(-4,-1) == ".lua" then

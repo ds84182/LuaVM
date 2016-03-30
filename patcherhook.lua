@@ -1,4 +1,4 @@
-require "luavm.bytecode"
+local bytecode = require "luavm.bytecode"
 
 function _HOOK()
 	print("Hook")

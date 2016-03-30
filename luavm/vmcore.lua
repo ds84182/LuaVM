@@ -1,3 +1,1 @@
-vm = {}
-vm.debug = false
-vm.typechecking = true
+this file is a syntax error. lol

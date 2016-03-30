@@ -1,25 +1,26 @@
-local vmversion = _VERSION:gsub("%D","")
-require "luavm.bytecode"
-print "required bytecode"
-require("luavm.vm"..vmversion)
-print "required vm51"
-local lua = vm["lua"..vmversion]
+local bytecode = require "luavm.bytecode"
+local lua = require "luavm.vm".native()
+
+local gbpkgs = {}
 
 local globals
 globals = setmetatable({
 	require = function(name)
+		if gbpkgs[name] then return gbpkgs[name] end
+		
 		local filename = name:gsub("%.","/")..".lua"
 		local file = io.open(filename)
 		if file then
 			file:close()
 			local bc = bytecode.load(string.dump(loadfile(filename)))
-			return lua.run(bc,nil,nil,globals)
+			gbpkgs[name] = lua.run(bc,{name},nil,globals)
+			return gbpkgs[name]
 		else
 			return require(name)
 		end
 	end,
 	loadstring = function(str,name)
-		local bc = bytecode.load(string.dump(loadstring(str)))
+		local bc = bytecode.load(string.dump(loadstring(str, name)))
 		return function(...) return lua.run(bc,{...},nil,globals) end
 	end,
 	--[[loadfile = function(file)
@@ -34,6 +35,7 @@ print("Got args: ",args[1])
 local file = table.remove(args,1)
 print("File: ",file)
 local bc = bytecode.load(string.dump(loadfile(file)))
+--local bc = bytecode.load(io.open(file,"rb"):read("*a"))
 print("Loaded bytecode")
 
 lua.run(bc,args,nil,globals)

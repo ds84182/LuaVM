@@ -9,7 +9,7 @@ local band, brshift = bit.band, bit.brshift
 local tostring, unpack = tostring, unpack or table.unpack
 local pack = table.pack or function(...) return {n=select("#",...),...} end
 
-require "luavm.vmcore"
+local vm = require "luavm.vm"
 vm.lua51 = {}
 
 local function debug(...)
@@ -280,10 +280,12 @@ do
 							i = i+1
 						end
 					else
-						for i=chunk.nparam+1, #args do
-							R[a+i-1] = args[i]
-							top = a+i-1
+						local base = chunk.nparam+1
+						local nargs = #args
+						for i=base, nargs do
+							R[a+i-base] = args[i]
 						end
+						top = a+nargs-base
 					end
 				elseif o == SELF then
 					R[a+1] = R[b]
@@ -414,12 +416,20 @@ do
 				end
 			end
 		end))
+		for i=0, chunk.maxStack do
+			if openUpvalues[i] then
+				local ouv = openUpvalues[i]
+				ouv.type = 2 --closed
+				ouv.storage = R[ouv.reg]
+				openUpvalues[i] = nil
+			end
+		end
 		if not ret[1] then
 			error(tostring(ret[2]).."\n"..tostring(chunk.name).." at pc "..(pc-1).." line "..tostring(chunk.sourceLines[pc-1]),0)
 		else
 			return unpack(ret,2,ret.n)
 		end
 	end
-
-	vm.run51 = vm.run
 end
+
+return vm.lua51

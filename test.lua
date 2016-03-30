@@ -1,5 +1,5 @@
-require "luavm.bytecode"
-require "luavm.vm51"
+local bytecode = require "luavm.bytecode"
+local vm = require "luavm.vm".native()
 
 function pass(...)
 	return ...
@@ -29,7 +29,7 @@ local dump = string.dump(function(...)
 	return false and 1 or 0
 end)
 
-print(vm.lua51.run(bytecode.load(dump),{"h","i",3,4,5}))
+--print(vm.lua51.run(bytecode.load(dump),{"h","i",3,4,5}))
 
 local testbc = string.dump(function() return "Hello" end)
 local testbcl = bytecode.load(testbc)
@@ -40,10 +40,10 @@ print(loadstring(testbc)())
 print(loadstring(testbco)())
 
 loadfile("hello.lua")()
-vm.lua51.run(bytecode.load(string.dump(loadfile("hello.lua"))))
+vm.run(bytecode.load(string.dump(loadfile("hello.lua"))))
 
 local opscalled = 0
-vm.lua51.run(
+vm.run(
 	bytecode.load(string.dump(function() while true do end end)),
 	nil,
 	nil,

@@ -1,4 +1,4 @@
-require "luavm.bytecode"
+local bytecode = require "luavm.bytecode"
 
 function stalkUpvalues(func)
 	local bc = bytecode.load(string.dump(func))

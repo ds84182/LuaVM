@@ -9,7 +9,7 @@ local band, brshift = bit.band, bit.brshift
 local tostring, unpack = tostring, unpack or table.unpack
 local pack = table.pack or function(...) return {n=select("#",...),...} end
 
-require "luavm.vmcore"
+local vm = require "luavm.vm"
 vm.lua52 = {}
 
 local function debug(...)
@@ -445,3 +445,5 @@ do
 		end
 	end
 end
+
+return vm.lua52

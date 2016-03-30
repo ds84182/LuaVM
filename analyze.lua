@@ -1,4 +1,4 @@
-require "luavm.bytecode"
+local bytecode = require "luavm.bytecode"
 
 local code = "local x = 0 repeat print(x) x = x+1 until x > 100"
 local lines = {}
