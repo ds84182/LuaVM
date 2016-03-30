@@ -353,6 +353,7 @@ return function(decoder)
 			collect(forloop)
 			i = dest
 		elseif conditionalOps[op] then
+			local condI = i
 			local cond, ni = decodeConditionalJumps(chunk, i)
 			i = ni
 			
@@ -416,64 +417,84 @@ return function(decoder)
 				
 				local dest = i+b
 				
-				local destOp, _, destB = version.decode(chunk.instructions[dest])
-				
-				if destOp == JMP and destB < -1 then -- -1 jumps back onto the instruction itself
-					local whileloop = {
-						op = "while",
-						src = {cond},
-						loop = {entry = i, exit = dest+1},
-						block = {},
-						pc = i
-					}
-					
-					target.decode(chunk, i+1, dest-1, whileloop, function(v) -- don't hit that end jump
-						whileloop.block[#whileloop.block+1] = v
-					end)
-					
-					i = dest
-					collect(whileloop)
-				else
+				-- If the jump continues the current loop from the top, this is an if statement at the end of a loop block
+				if context and context.loop and context.loop.entry == dest+1 then
 					local ifstat = {
 						op = "if",
 						src = {cond},
-						loop = context and context.loop or nil,
+						loop = context.loop,
 						block = {},
-						pc = i
+						pc = i,
+						assertLast = true -- This NEEDS to be the last one in a block
 					}
-				
-					local decodeElse = false
-					local decodeDest = dest
-					if destOp == JMP and destB > 0 then
-						-- TODO: Decide if this is a break or a jump
-						decodeDest = dest-1
-						decodeElse = true
-					end
-				
-					target.decode(chunk, i+1, decodeDest, ifstat, function(v)
+					
+					target.decode(chunk, i+1, i+1, ifstat, function(v)
 						ifstat.block[#ifstat.block+1] = v
 					end)
+					
+					i = i+1
+					
+					collect(ifstat)
+				else
+					local destOp, _, destB = version.decode(chunk.instructions[dest])
 				
-					if decodeElse then
-						local elsestat = {
-							op = "else",
-							loop = context and context.loop or nil,
+					if destOp == JMP and destB < -1 then -- -1 jumps back onto the instruction itself
+						local whileloop = {
+							op = "while",
+							src = {cond},
+							loop = {entry = condI, exit = dest+1},
 							block = {},
-							pc = dest
+							pc = i
 						}
 					
-						local elseDest = dest+destB
-						target.decode(chunk, dest+1, elseDest, elsestat, function(v)
-							elsestat.block[#elsestat.block+1] = v
+						target.decode(chunk, i+1, dest-1, whileloop, function(v) -- don't hit that end jump
+							whileloop.block[#whileloop.block+1] = v
 						end)
 					
-						ifstat.block[#ifstat.block+1] = elsestat
-						i = elseDest
-					else
 						i = dest
-					end
+						collect(whileloop)
+					else
+						local ifstat = {
+							op = "if",
+							src = {cond},
+							loop = context and context.loop or nil,
+							block = {},
+							pc = i
+						}
 				
-					collect(ifstat)
+						local decodeElse = false
+						local decodeDest = dest
+						if destOp == JMP and destB > 0 then
+							-- TODO: Decide if this is a break or a jump
+							decodeDest = dest-1
+							decodeElse = true
+						end
+				
+						target.decode(chunk, i+1, decodeDest, ifstat, function(v)
+							ifstat.block[#ifstat.block+1] = v
+						end)
+				
+						if decodeElse then
+							local elsestat = {
+								op = "else",
+								loop = context and context.loop or nil,
+								block = {},
+								pc = dest
+							}
+					
+							local elseDest = dest+destB
+							target.decode(chunk, dest+1, elseDest, elsestat, function(v)
+								elsestat.block[#elsestat.block+1] = v
+							end)
+					
+							ifstat.block[#ifstat.block+1] = elsestat
+							i = elseDest
+						else
+							i = dest
+						end
+				
+						collect(ifstat)
+					end
 				end
 			else
 				error("Invalid conditional operation magic!")
