@@ -370,9 +370,9 @@ do
 						local uvd = upvaldef[i]
 						if uvd.type == 0 then --local upvalue
 							return R[uvd.reg]
-						elseif uvd.type == 1 then
+						elseif uvd.type == 1 then --upvalue upvalue
 							return upvals[uvd.reg]
-						else
+						else -- closed upvalue
 							return uvd.storage
 						end
 					end,__newindex=function(_,i,v)
@@ -380,9 +380,9 @@ do
 						local uvd = upvaldef[i]
 						if uvd.type == 0 then --local upvalue
 							R[uvd.reg] = v
-						elseif uvd.type == 1 then
+						elseif uvd.type == 1 then --upvalue upvalue
 							upvals[uvd.reg] = v
-						else
+						else --closed upvalue
 							uvd.storage = v
 						end
 					end})
@@ -416,6 +416,7 @@ do
 				end
 			end
 		end))
+		-- Implicit Upvalue Close
 		for i=0, chunk.maxStack do
 			if openUpvalues[i] then
 				local ouv = openUpvalues[i]
