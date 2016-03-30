@@ -18,8 +18,8 @@ end
 
 local supportedTypes = string.dump(function() end):sub(7,12)
 
-bytecode.debug = false
 local bytecode = {}
+bytecode.debug = false
 bytecode.printDebug = function(fmt, ...)
 	if bytecode.debug then
 		print(fmt:format(...))
