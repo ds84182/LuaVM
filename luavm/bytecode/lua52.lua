@@ -237,6 +237,7 @@ return function(bytecode)
 			local function instructionList()
 				local instructions = {}
 				local count = integer()
+				instructions.count = count
 				for i=1, count do
 					instructions[i-1] = u4()
 				end
@@ -246,6 +247,7 @@ return function(bytecode)
 			local function constantList()
 				local constants = {}
 				local c = integer()
+				constants.count = c
 				for i=1, c do
 					local type = u1()
 					if type == 0 then
@@ -266,7 +268,9 @@ return function(bytecode)
 			
 			local function functionPrototypeList()
 				local functionPrototypes = {}
-				for i=1, integer() do
+				local count = integer()
+				functionPrototypes.count = count
+				for i=1, count do
 					functionPrototypes[i-1] = chunk()
 				end
 				return functionPrototypes
@@ -274,7 +278,9 @@ return function(bytecode)
 			
 			local function sourceLineList()
 				local sourceLines = {}
-				for i=1, integer() do
+				local count = integer()
+				sourceLines.count = count
+				for i=1, count do
 					sourceLines[i-1] = integer()
 				end
 				return sourceLines
@@ -282,7 +288,9 @@ return function(bytecode)
 			
 			local function localList()
 				local locals = {}
-				for i=1, integer() do
+				local count = integer()
+				locals.count = count
+				for i=1, count do
 					locals[i-1] = {
 						name = us(),
 						startpc = integer(),
@@ -294,7 +302,9 @@ return function(bytecode)
 			
 			local function upvalueList()
 				local upvalues = {}
-				for i=1, integer() do
+				local count = integer()
+				upvalues.count = count
+				for i=1, count do
 					upvalues[i-1] = us()
 				end
 				return upvalues
@@ -302,7 +312,9 @@ return function(bytecode)
 			
 			local function upvalueDefinitionList()
 				local upvalues = {}
-				for i=1, integer() do
+				local count = integer()
+				upvalues.count = count
+				for i=1, count do
 					upvalues[i-1] = {instack=u1(),idx=u1()}
 					debug("upvalue %d instack=%d idx=%d", i-1, upvalues[i-1].instack, upvalues[i-1].idx)
 				end
