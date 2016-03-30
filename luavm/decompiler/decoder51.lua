@@ -304,7 +304,7 @@ return function(decoder)
 			collect {op = "return", src = srcs, pc = i}
 		elseif op == JMP then
 			local dest = i+b+1 -- Lua does pre increment
-			local jop, ja, jb, jc = version.decode(chunk.instructions[dest])
+			local jop, ja, jb = version.decode(chunk.instructions[dest])
 
 			if jop == TFORLOOP then
 				-- generic for loop
@@ -327,6 +327,13 @@ return function(decoder)
 
 				collect(gfor)
 				i = dest+1 -- skip jump
+			elseif jb == -1 then -- tight loop with no statements (hang)
+				collect {
+					op = "while",
+					src = {V(true)},
+					block = {},
+					pc = i
+				}
 			elseif context and context.loop and dest == context.loop.exit then
 				collect {op = "break", pc = i}
 			else

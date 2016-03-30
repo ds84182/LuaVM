@@ -58,7 +58,7 @@ end]]
 	end
 end]]
 
-local function testFunc()
+--[[local function testFunc()
 	local i = 100
 	local v = 0
 	while i > 0 do
@@ -69,6 +69,10 @@ local function testFunc()
 		end
 	end
 	return v
+end]]
+
+local function testFunc()
+	while true do end
 end
 
 local bc = bytecode.load(string.dump(testFunc))
