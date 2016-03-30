@@ -25,7 +25,7 @@ return function(irBlock)
 		local function inlineBlock(irBlock)
 			for i=1, #irBlock do
 				ir = irBlock[i]
-				analyzer.forEachRegisterInEachExplet(ir.src, handleSource)
+				if ir.src then analyzer.forEachRegisterInEachExplet(ir.src, handleSource) end
 				if ir.block then
 					inlineBlock(ir.block)
 				end

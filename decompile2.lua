@@ -64,6 +64,9 @@ local function testFunc()
 	while i > 0 do
 		v = v+i
 		i = i-1
+		if v % 2 == 0 then
+			break
+		end
 	end
 	return v
 end
@@ -129,6 +132,8 @@ local function formatDecoded(dec)
 		return "for "..formatExpressionlets(dec.dest).." in "..formatExpressionlets(dec.src).." do\n"..formatBlock(dec.block).."\nend"
 	elseif dec.op == "while" then
 		return "while "..formatExpressionlets(dec.src).." do\n"..formatBlock(dec.block).."\nend"
+	elseif dec.op == "break" then
+		return "break"
 	end
 	return dumpValue(dec)
 end
