@@ -1,6 +1,6 @@
 return function()
 	local getA, getB, getC
-	-- Simple Close (Only functional in 5.1)
+	-- Simple Close
 	do
 		local a = 32
 		function getA() return a end
