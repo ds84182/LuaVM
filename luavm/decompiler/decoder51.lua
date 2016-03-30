@@ -359,7 +359,9 @@ return function(decoder)
 			op, a, b, c = version.decode(chunk.instructions[i])
 			
 			if op == JMP then
-				-- If the very next statement after a conditional expression is a jump, it is an if statement
+				-- If the very next statement after a conditional expression is a jump, it is an if statement or a while loop
+				
+				-- For IF Statements:
 				-- This jump goes to the else part of the if statement
 				-- If the op before the else part of the if statement is a jump that goes past the else statement, an else
 					-- statement is present
@@ -385,56 +387,94 @@ return function(decoder)
 					end
 					
 					Possible output (assuming `a` is a local variable):
-					LT r0, 256 (0 [constant 0])
+					LT r0, k0 [0]
 					JMP 2 [skip next 2] <-- Jump to the start of the else statement
 					MUL r0, r0, r0
 					JMP 1 [skip next] <-- Jump to the end of the else statement
 					DIV r0, r0, r0
 				]]
 				
+				-- For WHILE Statements:
+				-- The jump goes to the instruction after the backwards jump that targets the instruction after the current jump
+				--[[
+					Example:
+					
+					local a = 100
+					while a < 0 do
+						a = a-1
+					end
+					
+					Possible output:
+					LOADK r0, k0 [100]
+					LT r0, k1 [0]
+					JMP 2 <-- Jump after the backwards jump
+					SUB r0, r0, k2 [1]
+					JMP -4 <-- Jump to the condition check (LT)
+				]]
+				
+				-- An IF and WHILE statement are different because of the backwards jump
+				
 				local dest = i+b
 				
-				local ifstat = {
-					op = "if",
-					src = {cond},
-					loop = context and context.loop or nil,
-					block = {},
-					pc = i
-				}
+				local destOp, _, destB = version.decode(chunk.instructions[dest])
 				
-				local elseJumpOp, _, elseJumpB = version.decode(chunk.instructions[dest])
-				local decodeElse = false
-				local decodeDest = dest
-				if elseJumpOp == JMP and elseJumpB > 0 then
-					-- TODO: Decide if this is a break or a jump
-					decodeDest = dest-1
-					decodeElse = true
-				end
-				
-				target.decode(chunk, i+1, decodeDest, ifstat, function(v)
-					ifstat.block[#ifstat.block+1] = v
-				end)
-				
-				if decodeElse then
-					local elsestat = {
-						op = "else",
-						loop = context and context.loop or nil,
+				if destOp == JMP and destB < -1 then -- -1 jumps back onto the instruction itself
+					local whileloop = {
+						op = "while",
+						src = {cond},
+						loop = {entry = i, exit = dest+1},
 						block = {},
-						pc = dest
+						pc = i
 					}
 					
-					local elseDest = dest+elseJumpB
-					target.decode(chunk, dest+1, elseDest, elsestat, function(v)
-						elsestat.block[#elsestat.block+1] = v
+					target.decode(chunk, i+1, dest-1, whileloop, function(v) -- don't hit that end jump
+						whileloop.block[#whileloop.block+1] = v
 					end)
 					
-					ifstat.block[#ifstat.block+1] = elsestat
-					i = elseDest
-				else
 					i = dest
-				end
+					collect(whileloop)
+				else
+					local ifstat = {
+						op = "if",
+						src = {cond},
+						loop = context and context.loop or nil,
+						block = {},
+						pc = i
+					}
 				
-				collect(ifstat)
+					local decodeElse = false
+					local decodeDest = dest
+					if destOp == JMP and destB > 0 then
+						-- TODO: Decide if this is a break or a jump
+						decodeDest = dest-1
+						decodeElse = true
+					end
+				
+					target.decode(chunk, i+1, decodeDest, ifstat, function(v)
+						ifstat.block[#ifstat.block+1] = v
+					end)
+				
+					if decodeElse then
+						local elsestat = {
+							op = "else",
+							loop = context and context.loop or nil,
+							block = {},
+							pc = dest
+						}
+					
+						local elseDest = dest+destB
+						target.decode(chunk, dest+1, elseDest, elsestat, function(v)
+							elsestat.block[#elsestat.block+1] = v
+						end)
+					
+						ifstat.block[#ifstat.block+1] = elsestat
+						i = elseDest
+					else
+						i = dest
+					end
+				
+					collect(ifstat)
+				end
 			else
 				error("Invalid conditional operation magic!")
 			end

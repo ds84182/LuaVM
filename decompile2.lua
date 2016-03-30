@@ -52,10 +52,20 @@ end]]
 	return a
 end]]
 
-local function testFunc()
+--[[local function testFunc()
 	for i, v in next, _G do
 		print(i, v)
 	end
+end]]
+
+local function testFunc()
+	local i = 100
+	local v = 0
+	while i > 0 do
+		v = v+i
+		i = i-1
+	end
+	return v
 end
 
 local bc = bytecode.load(string.dump(testFunc))
@@ -117,6 +127,8 @@ local function formatDecoded(dec)
 		return "for "..formatExpressionlets(dec.dest).." = "..formatExpressionlets(dec.src).." do\n"..formatBlock(dec.block).."\nend"
 	elseif dec.op == "gfor" then
 		return "for "..formatExpressionlets(dec.dest).." in "..formatExpressionlets(dec.src).." do\n"..formatBlock(dec.block).."\nend"
+	elseif dec.op == "while" then
+		return "while "..formatExpressionlets(dec.src).." do\n"..formatBlock(dec.block).."\nend"
 	end
 	return dumpValue(dec)
 end
