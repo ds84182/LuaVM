@@ -71,8 +71,16 @@ end]]
 	return v
 end]]
 
-local function testFunc()
+--[[local function testFunc()
 	while true do end
+end]]
+
+local function testFunc()
+	print("Hello, World!", 1, 2, 2+3)
+	a,b = func()
+	-- register swap
+	local j,k = 1,2
+	j,k=k,j
 end
 
 local bc = bytecode.load(string.dump(testFunc))
