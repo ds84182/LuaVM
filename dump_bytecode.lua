@@ -1,4 +1,4 @@
-require "luavm.bytecode"
+local bytecode = require "luavm.bytecode"
 print "required bytecode"
 
 local args = {...}

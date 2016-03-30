@@ -1,4 +1,4 @@
-require "luavm.bytecode"
+local bytecode = require "luavm.bytecode"
 require "luavm.compiler"
 require "luavm.vm51"
 

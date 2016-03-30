@@ -1,5 +1,5 @@
 local decompiler = require "luavm.decompiler2"
-require "luavm.bytecode"
+local bytecode = require "luavm.bytecode"
 
 local lfs = require "lfs"
 

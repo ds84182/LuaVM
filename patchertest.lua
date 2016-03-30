@@ -1,5 +1,4 @@
-require "luavm.bytecode"
-require "luavm.vm51"
+local bytecode = require "luavm.bytecode"
 
 local bc = bytecode.load(string.dump(function()
 	local r = math.random()

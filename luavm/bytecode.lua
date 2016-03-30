@@ -18,8 +18,8 @@ end
 
 local supportedTypes = string.dump(function() end):sub(7,12)
 
-bytecode = {}
 bytecode.debug = false
+local bytecode = {}
 bytecode.printDebug = function(fmt, ...)
 	if bytecode.debug then
 		print(fmt:format(...))
@@ -52,7 +52,7 @@ else
 		if bitAvailable then
 			bytecode.bit = bit
 		else
-			error("TODO: Custom bitwise implementation here!")
+			error("TODO: Custom bitwise implementation here! (numberlua possibly)")
 		end
 	end
 
@@ -567,6 +567,4 @@ function bytecode.dump(bc)
 	end
 end
 
---[[if _VERSION == "Lua 5.3" then
-	require "luavm.bytecode_53"
-end]]
+return bytecode

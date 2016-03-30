@@ -23,7 +23,7 @@ if native then
 		if not s then print(e) end
 	end
 else
-	require "luavm.bytecode"
+	local bytecode = require "luavm.bytecode"
 	require "luavm.vm51"
 	for i, v in pairs(tests) do
 		arg = {}

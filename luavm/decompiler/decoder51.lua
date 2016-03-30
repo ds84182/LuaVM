@@ -1,6 +1,6 @@
 -- Decodes Lua 5.1 Bytecode into the Immediate Representation --
 
---[[local bytecode =]] require "luavm.bytecode"
+local bytecode = require "luavm.bytecode"
 local version = bytecode.version.lua51
 
 -- instruction constants copied from luavm.bytecode.lua51

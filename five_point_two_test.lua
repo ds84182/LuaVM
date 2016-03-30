@@ -1,4 +1,4 @@
-require "luavm.bytecode"
+local bytecode = require "luavm.bytecode"
 require "luavm.vm51"
 
 local testbc = string.dump(function() print "Hello" end)
