@@ -166,13 +166,13 @@ function analyzer.isInlinePossible(liveRanges, reg, pc)
 	end
 	
 	-- If the instruction with the register dest has multiple dests, inline is canceled
-	if #range.set.dest == 0 then
+	if #range.set.dest ~= 1 then
 		print("Cannot inline register "..reg..": Multiple dests in instruction")
 		return false
 	end
 	
 	-- If the instruction has multiple sources, inline is canceled (this shouldn't happen though)
-	if #range.set.src == 0 then
+	if #range.set.src ~= 1 then
 		print("Cannot inline register "..reg..": Multiple sources in instruction")
 		return false
 	end
