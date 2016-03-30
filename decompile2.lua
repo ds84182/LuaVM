@@ -75,12 +75,18 @@ end]]
 	while true do end
 end]]
 
-local function testFunc()
+--[[local function testFunc()
 	print("Hello, World!", 1, 2, 2+3)
 	a,b = func()
 	-- register swap
 	local j,k = 1,2
 	j,k=k,j
+end]]
+
+local function testFunc()
+	local testTable = {}
+	testTable.a = 4
+	return testTable.a
 end
 
 local bc = bytecode.load(string.dump(testFunc))
@@ -102,11 +108,16 @@ local function formatExpressionlet(explet)
 	elseif explet[1] == "global" then
 		return bc.constants[explet[2]]
 	elseif explet[1] == "value" then
+		if type(explet[2]) == "table" then
+			return "{}" -- TODO: Render table contents for table inlining
+		end
 		return tostring(explet[2])
 	elseif explet[1] == "call" then
 		return formatExpressionlet(explet[2]).."("..formatExpressionlets(explet[3])..")"
+	elseif explet[1] == "index" then
+		return formatExpressionlet(explet[2]).."["..formatExpressionlet(explet[3]).."]"
 	else
-		error("Unhandle explet "..explet[1])
+		error("Unhandle explet "..tostring(explet[1]))
 	end
 end
 

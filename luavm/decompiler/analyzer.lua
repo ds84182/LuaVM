@@ -30,7 +30,7 @@ local analyzer = {}
 -- Helper functions for iterating through registers used in an explet
 local function forEachRegister(explet, func, parent, parentIndex)
 	if explet[1] == "register" then
-		func(explet[2], parent, parentIndex)
+		func(explet[2], parent, parentIndex, false)
 	elseif explet[1] == "constant" then --ignore
 	elseif explet[1] == "global" then --ignore
 	elseif explet[1] == "value" then --ignore
@@ -45,15 +45,32 @@ local function forEachRegister(explet, func, parent, parentIndex)
 		for i=1, #args do
 			forEachRegister(args[i], func, args, i)
 		end
+	elseif explet[1] == "index" then
+		forEachRegister(explet[2], func, explet, 2)
+		forEachRegister(explet[3], func, explet, 3)
 	else
 		error("Unsupported explet type in analyzer: "..explet[1])
 	end
 end
 
 -- Helper functions for iterating through registers used multiple explets
-local function forEachRegisterInEachExplet(explets, func)
-	for i=1, #explets do
-		forEachRegister(explets[i], func, explets, i)
+local function forEachRegisterInEachExplet(explets, func, toplevelOnly)
+	if toplevel then
+		for i=1, #explets do
+			local explet = explets[i]
+			if explet[1] == "register" then
+				func(explet[2], explets, i, true)
+			end
+		end
+	else
+		for i=1, #explets do
+			local explet = explets[i]
+			if explet[1] == "register" then
+				func(explet[2], explets, i, true)
+			else
+				forEachRegister(explet, func, explets, i)
+			end
+		end
 	end
 end
 
@@ -71,15 +88,6 @@ function analyzer.computeLiveRanges(irBlock)
 		return {s, e, set = set, gets = 0, block = currentBlock}
 	end
 	
-	local function handleDest(reg)
-		if not registers[reg] then
-			registers[reg] = {makeRange(ir.pc, ir.pc, ir)}
-		else
-			local r = registers[reg]
-			r[#r+1] = makeRange(ir.pc, ir.pc, ir)
-		end
-	end
-	
 	local function handleSource(reg)
 		if not registers[reg] then
 			registers[reg] = {makeRange(-1, 0), argument = true}
@@ -90,6 +98,20 @@ function analyzer.computeLiveRanges(irBlock)
 		rrange.gets = rrange.gets+1
 		if rrange.block ~= currentBlock then
 			rrange.crossBlock = true
+		end
+	end
+	
+	local function handleDest(reg, _, _, toplevel)
+		if toplevel then
+			if not registers[reg] then
+				registers[reg] = {makeRange(ir.pc, ir.pc, ir)}
+			else
+				local r = registers[reg]
+				r[#r+1] = makeRange(ir.pc, ir.pc, ir)
+			end
+		else
+			-- A non top level destination is actually just a source, since the destination gets set indirectly
+			handleSource(reg)
 		end
 	end
 	
@@ -144,6 +166,12 @@ function analyzer.isInlinePossible(liveRanges, reg, pc)
 	-- Registers without live ranges cannot be inlined (not enough data)
 	if not range then
 		print("Cannot inline register "..reg..": Range not found")
+		return false
+	end
+	
+	-- Register cannot have multiple gets
+	if range.gets > 1 then
+		print("Cannot inline register "..reg..": More than one register get")
 		return false
 	end
 	
