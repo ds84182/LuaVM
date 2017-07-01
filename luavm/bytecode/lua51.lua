@@ -512,7 +512,7 @@ return function(bytecode)
 				if t == "boolean" then
 					u1(v and 1 or 0)
 				elseif t == "number" then
-					double(v)
+					number(v)
 				elseif t == "string" then
 					us(v)
 				end
@@ -521,7 +521,7 @@ return function(bytecode)
 			local lenFunctionPrototypes = chunk.functionPrototypes.count or len(chunk.functionPrototypes)
 			integer(lenFunctionPrototypes)
 			for i=0, lenFunctionPrototypes-1 do
-				writeChunk(chunk.functionPrototypes[i])
+				dumpChunk(chunk.functionPrototypes[i])
 			end
 
 			local lenSourceLines = chunk.sourceLines.count or len(chunk.sourceLines)
