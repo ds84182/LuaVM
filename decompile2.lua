@@ -8,13 +8,13 @@ lfs.mkdir "decompiler2temp"
 local function dumpValue(value, indent, skipTables)
 	indent = indent or ""
 	local typ = type(value)
-	
+
 	if typ == "table" and (not skipTables or not skipTables[value]) then
 		if not skipTables then skipTables = {} end
 		skipTables[value] = true
 		local buffer = {"{"}
 		local currentNumber = 1
-		
+
 		for i, v in pairs(value) do
 			if i == currentNumber then
 				currentNumber = currentNumber+1
@@ -23,7 +23,7 @@ local function dumpValue(value, indent, skipTables)
 				buffer[#buffer+1] = indent.."\t"..dumpValue(i, indent.."\t", skipTables)..": "..dumpValue(v, indent.."\t", skipTables)
 			end
 		end
-		
+
 		return table.concat(buffer, "\n").."\n"..indent.."}"
 	end
 
@@ -81,15 +81,40 @@ end]]
 	-- register swap
 	local j,k = 1,2
 	j,k=k,j
+	-- global swap
+	a,b,c = b,a,k
 end]]
 
-local function testFunc()
+--[[local function testFunc()
 	local testTable = {}
 	testTable.a = 4
 	return testTable.a
+end]]
+
+--[[local function testFunc()
+	return {
+		a = 5,
+		b = 6,
+		[4] = 3
+	}
+end]]
+
+--[[local function testFunc()
+	if (not x) and y then
+		return 3
+	end
+end]]
+
+local function testFunc()
+	local x, y, z = 5, 6
+	while x == 5 and y == 6 do
+		if not z then
+			z = {}
+		end
+		print(z)
+	end
 end
 
-local bc = bytecode.load(string.dump(testFunc))
 print(dumpValue(bc))
 bytecode.dump(bc)
 local decoder = decompiler.decoder.native()
@@ -133,7 +158,7 @@ function formatExpressionlets(explets)
 	end
 end
 
-local formatBlock
+--local formatBlock
 
 local function formatDecoded(dec)
 	if dec.disabled then return "" end
@@ -192,8 +217,11 @@ end
 
 block.liveRanges = decompiler.analyzer.computeLiveRanges(block)
 
+decompiler.pass[2](block)
 decompiler.pass[1](block)
 
 for i=1, #block do
 	print(formatDecoded(block[i]))
 end
+
+print(decompiler.formatter.formatFunction(bc, block, "testFunc"))
