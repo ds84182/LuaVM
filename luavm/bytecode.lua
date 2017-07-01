@@ -561,20 +561,26 @@ end
 
 function bytecode.dump(bc)
 	local ver = bytecode.version[bc.header.version]
-	
+
 	local function dumpChunk(bc)
+		print("Constants:")
+		for i=0, bc.constants.count-1 do
+			print(i, type(bc.constants[i]), bc.constants[i])
+		end
+
+		print("Instructions:")
 		for i=0, bc.instructions.count-1 do
 			local o,a,b,c = ver.decode(bc.instructions[i])
 			print(i, ver.instructionNames[o], a, b, c)
 		end
-		
+
 		for i=0, bc.functionPrototypes.count-1 do
 			print("Prototype "..i)
 			dumpChunk(bc.functionPrototypes[i])
 			print("End Prototype "..i)
 		end
 	end
-	
+
 	dumpChunk(bc)
 end
 
