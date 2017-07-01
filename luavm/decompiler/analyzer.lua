@@ -80,14 +80,14 @@ analyzer.forEachRegisterInEachExplet = forEachRegisterInEachExplet
 function analyzer.computeLiveRanges(irBlock)
 	-- Recursively flatten sources and create a list of used registers in the block (for per register state)
 	local registers = {}
-	
+
 	local currentBlock = irBlock
 	local ir
-	
+
 	local function makeRange(s, e, set)
 		return {s, e, set = set, gets = 0, block = currentBlock}
 	end
-	
+
 	local function handleSource(reg)
 		if not registers[reg] then
 			registers[reg] = {makeRange(-1, 0), argument = true}
@@ -100,7 +100,7 @@ function analyzer.computeLiveRanges(irBlock)
 			rrange.crossBlock = true
 		end
 	end
-	
+
 	local function handleDest(reg, _, _, toplevel)
 		if toplevel then
 			if not registers[reg] then
@@ -114,7 +114,7 @@ function analyzer.computeLiveRanges(irBlock)
 			handleSource(reg)
 		end
 	end
-	
+
 	local function doBlock(irBlock)
 		currentBlock = irBlock
 		for i=1, #irBlock do
@@ -136,10 +136,14 @@ function analyzer.computeLiveRanges(irBlock)
 			end
 		end
 	end
-	
+
 	doBlock(irBlock)
-	
+
 	return registers
+end
+
+function analyzer.computeGlobalStateChanges(irBlock)
+	local gsc = {}
 end
 
 -- Helper method to find the range that pc falls in in a list of register ranges
@@ -161,56 +165,63 @@ function analyzer.isInlinePossible(liveRanges, reg, pc)
 		print("Cannot inline register "..reg..": Is argument")
 		return false
 	end
-	
+
 	local range = findRange(liveRanges[reg], pc)
 	-- Registers without live ranges cannot be inlined (not enough data)
 	if not range then
 		print("Cannot inline register "..reg..": Range not found")
 		return false
 	end
-	
+
 	-- Register cannot have multiple gets
 	if range.gets > 1 then
 		print("Cannot inline register "..reg..": More than one register get")
 		return false
 	end
-	
+
 	-- Registers with multiple uses cannot be inlined
 	if range[2] > pc then
 		print("Cannot inline register "..reg..": Usage range is greater than current pc")
 		return false
 	end
-	
+
 	-- Registers that are used in multiple blocks cannot be inlined
 	if range.crossBlock then
 		print("Cannot inline register "..reg..": Cross block usage")
 		return false
 	end
-	
+
+	--[[local targetrange = findRange(liveRanges[reg], targetpc)
+	-- Registers cannot be optimized across ranges
+	if range ~= targetrange then
+		print("Cannot inline register "..reg..": Source and target ranges do not match")
+		return false
+	end]]
+
 	-- The following checks go off of the instruction that started the register range
 	-- If the instruction is disabled, disallow inline
 	if range.set.disabled then
 		print("Cannot inline register "..reg..": Instruction disabled because "..range.set.disabled)
 	end
-	
+
 	-- If the instruction with the register dest has multiple dests, inline is canceled
 	if #range.set.dest ~= 1 then
 		print("Cannot inline register "..reg..": Multiple dests in instruction")
 		return false
 	end
-	
+
 	-- If the instruction has multiple sources, inline is canceled (this shouldn't happen though)
 	if #range.set.src ~= 1 then
 		print("Cannot inline register "..reg..": Multiple sources in instruction")
 		return false
 	end
-	
+
 	-- If the set instruction has a block, disallow inline (else it would try to inling if statements)
 	if range.set.block then
 		print("Cannot inline register "..reg..": Instruction has block")
 		return false
 	end
-	
+
 	-- meh, I guess it can be inlined
 	return true, range.set
 end
