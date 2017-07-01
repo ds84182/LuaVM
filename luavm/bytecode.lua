@@ -105,7 +105,7 @@ else
 			float = function(value, bigEndian)
 				error("NYI")
 			end,
-			double = function(value, bigEndian)
+			double = function(x, bigEndian)
 				local sign = 0
 				if x < 0 then sign = 1; x = -x end
 				local mantissa, exponent = math.frexp(x)
